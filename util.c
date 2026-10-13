@@ -11,26 +11,24 @@
 
 int kread(uint64_t kaddr, void *dst, size_t len)
 {
-  kernel_copyout(kaddr, dst, len);
-  return 0;
+  return kernel_copyout(kaddr, dst, len);
 }
 
 int kwrite(uint64_t kaddr, const void *src, size_t len)
 {
-  kernel_copyin(src, kaddr, len);
-  return 0;
+  return kernel_copyin(src, kaddr, len);
 }
 
 uint32_t kread32(uint64_t kaddr)
 {
-  uint32_t v;
+  uint32_t v = 0;
   kread(kaddr, &v, sizeof(v));
   return v;
 }
 
 uint64_t kread64(uint64_t kaddr)
 {
-  uint64_t v;
+  uint64_t v = 0;
   kread(kaddr, &v, sizeof(v));
   return v;
 }
