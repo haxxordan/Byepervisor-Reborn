@@ -57,6 +57,15 @@ resume-stock-probe-1270.elf: resume_stock_probe_1270.c khook.c kdlsym.c util.c i
 resume-stock-prepare-1270.elf: resume_stock_probe_1270.c khook.c kdlsym.c util.c include/offsets/12_70_candidate.h
 	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -DRESUME_STOCK_PREP_ONLY_1270 -o $@ $(filter %.c,$^)
 
+ap-cr3-high-probe-1270.elf: ap-cr3-probe-1270.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DAP_CR3_HIGH_1270 -o $@ $(filter %.c,$^)
+
+ap-entry-prepare-1270.elf: ap_entry_probe_1270.c carrier_1270.c khook.c kdlsym.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -DAP_ENTRY_PREP_ONLY_1270 -o $@ $(filter %.c,$^)
+
+ap-entry-probe-1270.elf: ap_entry_probe_1270.c carrier_1270.c khook.c kdlsym.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -o $@ $(filter %.c,$^)
+
 pivot-iret-prepare-1270.elf: pivot_iret_probe_1270.c kdlsym.c util.c include/offsets/12_70_candidate.h
 	$(CC) $(CFLAGS) -DPIVOT_PREP_ONLY_1270 -o $@ $(filter %.c,$^)
 
@@ -153,6 +162,9 @@ carrier-layout-probe-1270.elf: carrier-read-probe-1270.c include/offsets/12_70_c
 carrier-save-probe-1270.elf: carrier-read-probe-1270.c include/offsets/12_70_candidate.h
 	$(CC) $(CFLAGS) -DCARR_SAVE_1270 -o $@ carrier-read-probe-1270.c
 
+carrier-save-current-probe-1270.elf: carrier-read-probe-1270.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DCARR_SAVE_1270 -DCARR_SAVE_CURRENT_1270 -o $@ carrier-read-probe-1270.c
+
 carrier-neighborhood-probe-1270.elf: carrier-neighborhood-probe-1270.c include/offsets/12_70_candidate.h
 	$(CC) $(CFLAGS) -o $@ carrier-neighborhood-probe-1270.c
 
@@ -232,6 +244,8 @@ clean:
 	rm -f second-db-prepare-1270.elf second-db-trigger-1270.elf
 	rm -f resume-stock-probe-1270.elf
 	rm -f resume-stock-prepare-1270.elf
+	rm -f ap-cr3-high-probe-1270.elf
+	rm -f ap-entry-prepare-1270.elf ap-entry-probe-1270.elf
 	rm -f pivot-iret-prepare-1270.elf pivot-iret-trigger-1270.elf
 	rm -f pivot-pop-rax-prepare-1270.elf pivot-pop-rax-trigger-1270.elf
 	rm -f pivot-dbreg-prepare-1270.elf pivot-dbreg-trigger-1270.elf
@@ -251,6 +265,7 @@ clean:
 	rm -f carrier-read-probe-1270.elf
 	rm -f carrier-layout-probe-1270.elf
 	rm -f carrier-save-probe-1270.elf
+	rm -f carrier-save-current-probe-1270.elf
 	rm -f carrier-neighborhood-probe-1270.elf
 	rm -f owned-carrier-probe-1270.elf
 	rm -f owned-carrier-map-probe-1270.elf

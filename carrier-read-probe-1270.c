@@ -4,6 +4,10 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
+#ifdef CARR_SAVE_CURRENT_1270
+#include <stdio.h>
+#include <time.h>
+#endif
 #endif
 #ifdef CARR_LAYOUT_1270
 #include <unistd.h>
@@ -78,7 +82,17 @@ int main(void)
               ",first=0x%016" PRIx64 ",last=0x%016" PRIx64 "\n",
               carrier, hash_bytes(page, PAGE_BYTES), zero, ff, first, last);
 #ifdef CARR_SAVE_1270
+#ifdef CARR_SAVE_CURRENT_1270
+  struct timespec stamp = {0};
+  if (clock_gettime(CLOCK_REALTIME, &stamp) != 0)
+    return 1;
+  char path[128];
+  snprintf(path, sizeof(path),
+           "/mnt/usb0/PS5-12.70-carrier-3ffff000-%d-%ld.bin",
+           (int)getpid(), (long)stamp.tv_sec);
+#else
   const char *path = "/mnt/usb0/PS5-12.70-carrier-3ffff000.bin";
+#endif
   int fd = open(path, O_WRONLY | O_CREAT | O_EXCL, 0600);
   if (fd < 0) {
     klog_printf("CARRSAVE1270,1,stop,stage=open,errno=%d\n", errno);

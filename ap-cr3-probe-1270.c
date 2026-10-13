@@ -108,6 +108,11 @@ int main(void)
     0x0000000026658000ULL,
     0x000000003fe06000ULL,
     0x000000003ffff000ULL,
+#ifdef AP_CR3_HIGH_1270
+    text + g_sym_map_1270[KERNEL_SYM_MP_STARTUP_INIT_VECTOR],
+    text + g_sym_map_1270[KERNEL_SYM_DATA_CAVE],
+    dmap + 0x3ffff100ULL,
+#endif
   };
   unsigned mapped = 0, identity_exec = 0;
   klog_printf("APCR31270,1,start,fw=0x%08x,cr3_pa=0x%016" PRIx64
