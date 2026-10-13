@@ -1,5 +1,8 @@
 #include <inttypes.h>
 #include <stdint.h>
+#ifdef CARR_LAYOUT_1270
+#include <unistd.h>
+#endif
 
 #include <ps5/kernel.h>
 #include <ps5/klog.h>
@@ -12,11 +15,14 @@
 #define PAGE_BYTES 0x1000U
 
 static uint8_t page[PAGE_BYTES];
+#ifdef CARR_LAYOUT_1270
+static uint8_t page_after[PAGE_BYTES];
+#endif
 
-static uint64_t hash_page(const uint8_t *data)
+static uint64_t hash_bytes(const uint8_t *data, unsigned len)
 {
   uint64_t h = 0xcbf29ce484222325ULL;
-  for (unsigned i = 0; i < PAGE_BYTES; ++i) {
+  for (unsigned i = 0; i < len; ++i) {
     h ^= data[i];
     h *= 0x100000001b3ULL;
   }
@@ -65,7 +71,33 @@ int main(void)
   klog_printf("CARR1270,1,page,va=0x%016" PRIx64
               ",hash=0x%016" PRIx64 ",zero=%u,ff=%u"
               ",first=0x%016" PRIx64 ",last=0x%016" PRIx64 "\n",
-              carrier, hash_page(page), zero, ff, first, last);
+              carrier, hash_bytes(page, PAGE_BYTES), zero, ff, first, last);
+#ifdef CARR_LAYOUT_1270
+  for (unsigned chunk = 0; chunk < PAGE_BYTES / 0x100; ++chunk) {
+    const uint8_t *part = page + chunk * 0x100;
+    unsigned nonzero = 0;
+    for (unsigned i = 0; i < 0x100; ++i)
+      nonzero += part[i] != 0;
+    uint64_t head = 0;
+    for (unsigned i = 0; i < 8; ++i)
+      head |= (uint64_t)part[i] << (8 * i);
+    klog_printf("CARRLAY1270,1,chunk,offset=0x%03x,nonzero=%u,hash=0x%016" PRIx64
+                ",first=0x%016" PRIx64 "\n",
+                chunk * 0x100, nonzero, hash_bytes(part, 0x100), head);
+  }
+  sleep(5);
+  if (kernel_copyout((intptr_t)carrier, page_after, sizeof(page_after)) != 0) {
+    klog_printf("CARRLAY1270,1,stop,stage=second-read\n");
+    return 1;
+  }
+  unsigned changed = 0;
+  for (unsigned i = 0; i < PAGE_BYTES; ++i)
+    changed += page[i] != page_after[i];
+  klog_printf("CARRLAY1270,1,repeat,seconds=5,changed=%u,hash_before=0x%016" PRIx64
+              ",hash_after=0x%016" PRIx64 "\n",
+              changed, hash_bytes(page, PAGE_BYTES),
+              hash_bytes(page_after, PAGE_BYTES));
+#endif
   klog_printf("CARR1270,1,end,ok\n");
   return 0;
 }
