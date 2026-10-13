@@ -36,6 +36,9 @@ all: $(ELF)
 preflight-1270.elf: preflight_1270.c include/offsets/12_70_candidate.h
 	$(CC) $(CFLAGS) -o $@ preflight_1270.c
 
+gadget-page-probe-1270.elf: gadget_page_probe_1270.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -o $@ gadget_page_probe_1270.c
+
 $(DIAG_HDR): $(PAYLOAD_DIR)/break_hv_diag.c $(PAYLOAD_DIR)/entry.S $(PAYLOAD_DIR)/link.ld $(PAYLOAD_DIR)/build_diag.sh
 	sh $(PAYLOAD_DIR)/build_diag.sh
 
@@ -51,6 +54,7 @@ $(ELF): $(PAYLOAD_HDR) main.c kdlsym.c khook.c paging.c util.c
 clean:
 	rm -f $(ELF)
 	rm -f preflight-1270.elf
+	rm -f gadget-page-probe-1270.elf
 	rm -f byepervisor_1270_diag.elf
 	rm -f $(PAYLOAD_DIR)/break_hv_diag.h $(PAYLOAD_DIR)/break_hv_diag.bin $(PAYLOAD_DIR)/break_hv_diag.elf $(PAYLOAD_DIR)/break_hv_diag.o
 	rm -f $(PAYLOAD_DIR)/break_hv.h $(PAYLOAD_DIR)/break_hv.bin $(PAYLOAD_DIR)/break_hv.elf $(PAYLOAD_DIR)/*.o
