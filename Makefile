@@ -51,6 +51,9 @@ carrier-layout-probe-1270.elf: carrier-read-probe-1270.c include/offsets/12_70_c
 carrier-save-probe-1270.elf: carrier-read-probe-1270.c include/offsets/12_70_candidate.h
 	$(CC) $(CFLAGS) -DCARR_SAVE_1270 -o $@ carrier-read-probe-1270.c
 
+carrier-neighborhood-probe-1270.elf: carrier-neighborhood-probe-1270.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -o $@ carrier-neighborhood-probe-1270.c
+
 owned-carrier-probe-1270.elf: owned-carrier-probe-1270.c
 	$(CC) $(CFLAGS) -o $@ owned-carrier-probe-1270.c
 
@@ -104,6 +107,7 @@ clean:
 	rm -f carrier-read-probe-1270.elf
 	rm -f carrier-layout-probe-1270.elf
 	rm -f carrier-save-probe-1270.elf
+	rm -f carrier-neighborhood-probe-1270.elf
 	rm -f owned-carrier-probe-1270.elf
 	rm -f owned-carrier-map-probe-1270.elf
 	rm -f gpuvm-preflight-1270.elf
