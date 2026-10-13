@@ -57,6 +57,9 @@ gpuvm-known-data-probe-1270.elf: gpuvm_known_data_probe_1270.c include/offsets/1
 gpuvm-xotext-probe-1270.elf: gpuvm_xotext_probe_1270.c include/offsets/12_70_candidate.h
 	$(CC) $(CFLAGS) -o $@ gpuvm_xotext_probe_1270.c
 
+gpuvm-xotext-pivot-probe-1270.elf: gpuvm_xotext_probe_1270.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DTARGET_TEXT_OFFSET=0x2A8000ULL -o $@ gpuvm_xotext_probe_1270.c
+
 $(DIAG_HDR): $(PAYLOAD_DIR)/break_hv_diag.c $(PAYLOAD_DIR)/entry.S $(PAYLOAD_DIR)/link.ld $(PAYLOAD_DIR)/build_diag.sh
 	sh $(PAYLOAD_DIR)/build_diag.sh
 
@@ -79,6 +82,7 @@ clean:
 	rm -f gpuvm-pa-preflight-1270.elf
 	rm -f gpuvm-known-data-probe-1270.elf
 	rm -f gpuvm-xotext-probe-1270.elf
+	rm -f gpuvm-xotext-pivot-probe-1270.elf
 	rm -f byepervisor_1270_diag.elf
 	rm -f $(PAYLOAD_DIR)/break_hv_diag.h $(PAYLOAD_DIR)/break_hv_diag.bin $(PAYLOAD_DIR)/break_hv_diag.elf $(PAYLOAD_DIR)/break_hv_diag.o
 	rm -f $(PAYLOAD_DIR)/break_hv.h $(PAYLOAD_DIR)/break_hv.bin $(PAYLOAD_DIR)/break_hv.elf $(PAYLOAD_DIR)/*.o

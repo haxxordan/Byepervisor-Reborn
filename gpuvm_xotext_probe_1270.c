@@ -17,6 +17,16 @@
 #include "offsets/12_70_candidate.h"
 
 /* Bounded GPU read of one execute-only kernel text page. */
+#ifndef TARGET_TEXT_OFFSET
+#define TARGET_TEXT_OFFSET 0ULL
+#endif
+#if TARGET_TEXT_OFFSET == 0ULL
+#define OUTPUT_PATH "/mnt/usb0/PS5-12.70-ktext-page0.bin"
+#elif TARGET_TEXT_OFFSET == 0x2A8000ULL
+#define OUTPUT_PATH "/mnt/usb0/PS5-12.70-ktext-pivot-2a8000.bin"
+#else
+#error Unsupported text page offset
+#endif
 #define FW_1270             0x12700000U
 #define DATA_GVMSPACE_OFF   0x2E7E570ULL
 #define GVM_ENTRY_SIZE      0x100ULL
@@ -45,7 +55,6 @@
 #define PM4_TYPE3           3U
 #define PM4_OPCODE_DMA_DATA 0x50U
 #define PM4_SHADER_COMPUTE  1U
-#define OUTPUT_PATH         "/mnt/usb0/PS5-12.70-ktext-page0.bin"
 
 typedef int (*fn_alloc_dmem)(off_t, off_t, size_t, size_t, int, off_t *);
 typedef int (*fn_map_dmem)(void **, size_t, int, int, off_t, size_t);
@@ -238,6 +247,7 @@ int main(void)
   uint32_t fw = kernel_get_fw_version();
   uint64_t text = (uint64_t)KERNEL_ADDRESS_TEXT_BASE;
   uint64_t data = (uint64_t)KERNEL_ADDRESS_DATA_BASE;
+  uint64_t target_va = text + TARGET_TEXT_OFFSET;
   uint64_t dmap = 0, cr3 = 0, target_pa = 0;
   uint64_t target_cpu_leaf = 0;
   uint64_t victim_entry_pa = 0, old_leaf = 0;
@@ -252,10 +262,11 @@ int main(void)
     klog_printf("GVMXOTEXT1270,1,stop,stage=preflight,fw=0x%08x\n", fw);
     return 1;
   }
-  klog_printf("GVMXOTEXT1270,1,start,fw=0x%08x,text=0x%016" PRIx64 "\n",
-              fw, text);
+  klog_printf("GVMXOTEXT1270,1,start,fw=0x%08x,text=0x%016" PRIx64
+              ",offset=0x%016" PRIx64 "\n", fw, text,
+              (uint64_t)TARGET_TEXT_OFFSET);
 
-  if (cpu_translate(dmap, cr3, text, &target_pa, &target_cpu_leaf) != 0 ||
+  if (cpu_translate(dmap, cr3, target_va, &target_pa, &target_cpu_leaf) != 0 ||
       target_pa < 0x1000 || target_pa > MAX_PHYSICAL_PA - COPY_SIZE ||
       (target_pa & 0xfff) ||
       (target_pa & 0x1fffffULL) > BUFFER_SIZE - COPY_SIZE ||
@@ -264,10 +275,10 @@ int main(void)
                 ",leaf=0x%016" PRIx64 "\n", target_pa, target_cpu_leaf);
     goto done;
   }
-  klog_printf("GVMXOTEXT1270,1,target,pa=0x%016" PRIx64
+  klog_printf("GVMXOTEXT1270,1,target,va=0x%016" PRIx64 ",pa=0x%016" PRIx64
               ",within_2m=0x%05" PRIx64 ",cpu_leaf=0x%016" PRIx64
               ",xotext=1,nx=0\n",
-              target_pa, target_pa & 0x1fffffULL, target_cpu_leaf);
+              target_va, target_pa, target_pa & 0x1fffffULL, target_cpu_leaf);
 
   allocate = (fn_alloc_dmem)dlsym(RTLD_DEFAULT, "sceKernelAllocateDirectMemory");
   map = (fn_map_dmem)dlsym(RTLD_DEFAULT, "sceKernelMapDirectMemory");
