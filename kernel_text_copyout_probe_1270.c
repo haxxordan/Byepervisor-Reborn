@@ -5,6 +5,8 @@
 
 #include <ps5/kernel.h>
 
+/* This probe caused a KP on 12.70. Retained for diagnosis; do not rerun. */
+
 #define FW_1270 0x12700000U
 #define PAGE_SIZE 0x1000U
 

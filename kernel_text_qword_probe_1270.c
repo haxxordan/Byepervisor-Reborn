@@ -4,6 +4,9 @@
 
 #include <ps5/kernel.h>
 
+/* This probe caused a KP on 12.70 even with only elfldr resident.
+ * Retained for diagnosis; do not run it again unchanged. */
+
 #define FW_1270 0x12700000U
 
 static int probe(const char *name, uint64_t va)
