@@ -51,6 +51,12 @@ second-db-prepare-1270.elf: second_db_probe_1270.c khook.c kdlsym.c util.c inclu
 second-db-trigger-1270.elf: second_db_probe_1270.c khook.c kdlsym.c util.c include/offsets/12_70_candidate.h
 	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -o $@ $(filter %.c,$^)
 
+resume-stock-probe-1270.elf: resume_stock_probe_1270.c khook.c kdlsym.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -o $@ $(filter %.c,$^)
+
+resume-stock-prepare-1270.elf: resume_stock_probe_1270.c khook.c kdlsym.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -DRESUME_STOCK_PREP_ONLY_1270 -o $@ $(filter %.c,$^)
+
 pivot-iret-prepare-1270.elf: pivot_iret_probe_1270.c kdlsym.c util.c include/offsets/12_70_candidate.h
 	$(CC) $(CFLAGS) -DPIVOT_PREP_ONLY_1270 -o $@ $(filter %.c,$^)
 
@@ -224,6 +230,8 @@ clean:
 	rm -f cpu-tss-live-probe-1270.elf
 	rm -f sysent-getuid-probe-1270.elf
 	rm -f second-db-prepare-1270.elf second-db-trigger-1270.elf
+	rm -f resume-stock-probe-1270.elf
+	rm -f resume-stock-prepare-1270.elf
 	rm -f pivot-iret-prepare-1270.elf pivot-iret-trigger-1270.elf
 	rm -f pivot-pop-rax-prepare-1270.elf pivot-pop-rax-trigger-1270.elf
 	rm -f pivot-dbreg-prepare-1270.elf pivot-dbreg-trigger-1270.elf
