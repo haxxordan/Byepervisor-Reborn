@@ -2,6 +2,9 @@
 #include <stdint.h>
 #include <sys/mman.h>
 #ifdef ANON_HOLD_1270
+#include <fcntl.h>
+#include <stdio.h>
+#include <string.h>
 #include <time.h>
 #endif
 #include <unistd.h>
@@ -20,6 +23,21 @@
 #define FRAME_4K 0x000FFFFFFFFFF000ULL
 #define FRAME_2M 0x000FFFFFFFE00000ULL
 #define FRAME_1G 0x000FFFFFC0000000ULL
+
+#ifdef ANON_HOLD_1270
+static int save_line(const char *path, const char *line, int create)
+{
+  int flags = O_WRONLY | (create ? O_CREAT | O_EXCL : O_APPEND);
+  int fd = open(path, flags, 0600);
+  if (fd < 0)
+    return -1;
+  size_t len = strlen(line);
+  ssize_t written = write(fd, line, len);
+  int sync_rc = written == (ssize_t)len ? fsync(fd) : -1;
+  int close_rc = close(fd);
+  return written == (ssize_t)len && sync_rc == 0 && close_rc == 0 ? 0 : -1;
+}
+#endif
 
 static int read64(uint64_t va, uint64_t *out)
 {
@@ -152,6 +170,9 @@ int main(void)
   result = 0;
 
 #ifdef ANON_HOLD_1270
+  char outcome_path[128];
+  snprintf(outcome_path, sizeof(outcome_path),
+           "/mnt/usb0/PS5-12.70-anon-hold-%d.txt", (int)getpid());
   if (!first_low_va || !alias_match) {
     klog_printf("ANONHOLD1270,1,stop,stage=no-low-page\n");
     result = 1;
@@ -180,6 +201,18 @@ int main(void)
     result = 1;
     goto unlock;
   }
+  char line[256];
+  snprintf(line, sizeof(line),
+           "ready,pid=%d,pa=0x%016" PRIx64 ",va=0x%016" PRIx64
+           ",marker=0x%016" PRIx64 "\n", (int)getpid(), first_low,
+           (uint64_t)(uintptr_t)first_low_va, marker);
+  if (save_line(outcome_path, line, 1) != 0) {
+    klog_printf("ANONHOLD1270,1,stop,stage=save-ready,path=%s\n",
+                outcome_path);
+    result = 1;
+    goto unlock;
+  }
+  klog_printf("ANONHOLD1270,1,output,path=%s,ready_saved=1\n", outcome_path);
   klog_printf("ANONHOLD1270,1,ready,pa=0x%016" PRIx64
               ",marker=0x%016" PRIx64 ",wait_seconds=600\n",
               first_low, marker);
@@ -207,9 +240,22 @@ int main(void)
                   ",match=%d\n", gap, walk_rc, first_low, pa_after,
                   alias_rc, marker_after,
                   alias_rc == 0 && marker_after == marker);
+      snprintf(line, sizeof(line),
+               "resume,gap_seconds=%" PRId64 ",walk=%d,pa_before=0x%016" PRIx64
+               ",pa_after=0x%016" PRIx64 ",alias_read=%d,marker=0x%016" PRIx64
+               ",match=%d\n", gap, walk_rc, first_low, pa_after, alias_rc,
+               marker_after, alias_rc == 0 && marker_after == marker);
+      int save_rc = -1;
+      for (unsigned attempt = 0; attempt < 60 && save_rc != 0; ++attempt) {
+        save_rc = save_line(outcome_path, line, 0);
+        if (save_rc != 0)
+          sleep(1);
+      }
+      klog_printf("ANONHOLD1270,1,output,resume_saved=%d,path=%s\n",
+                  save_rc == 0, outcome_path);
       resume_seen = 1;
       if (walk_rc != 0 || pa_after != first_low ||
-          alias_rc != 0 || marker_after != marker)
+          alias_rc != 0 || marker_after != marker || save_rc != 0)
         result = 1;
       break;
     }
@@ -218,6 +264,7 @@ int main(void)
   }
   if (!resume_seen && result == 0) {
     klog_printf("ANONHOLD1270,1,timeout,no-resume-observed\n");
+    save_line(outcome_path, "timeout,no-resume-observed\n", 0);
     result = 1;
   }
 unlock:;
