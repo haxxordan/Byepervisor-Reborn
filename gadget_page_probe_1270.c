@@ -137,12 +137,34 @@ int main(void)
     uint64_t offset;
   } targets[] = {
     {"pivot", g_gadget_map_1270[KERNEL_GADGET_PIVOT_ADD_RSP28_RET]},
-    {"pop_rax", g_gadget_map_1270[KERNEL_GADGET_POP_RAX]},
-    {"pop_rdi", g_gadget_map_1270[KERNEL_GADGET_POP_RDI]},
-    {"dbreg_resume", g_gadget_map_1270[KERNEL_GADGET_DBREG_RESUME]},
     {"iretq", g_gadget_map_1270[KERNEL_GADGET_IRETQ]},
+    {"pop_rax", g_gadget_map_1270[KERNEL_GADGET_POP_RAX]},
+    {"pop_rcx", g_gadget_map_1270[KERNEL_GADGET_POP_RCX]},
+    {"pop_rdi", g_gadget_map_1270[KERNEL_GADGET_POP_RDI]},
+    {"pop_rsi", g_gadget_map_1270[KERNEL_GADGET_POP_RSI]},
+    {"pop_rdx", g_gadget_map_1270[KERNEL_GADGET_POP_RDX]},
+    {"pop_r8", g_gadget_map_1270[KERNEL_GADGET_POP_R8]},
+    {"pop_rsp", g_gadget_map_1270[KERNEL_GADGET_POP_RSP]},
+    {"store_rcx_r8", g_gadget_map_1270[KERNEL_GADGET_STORE_RCX_R8]},
+    {"store_rdi8_rcx", g_gadget_map_1270[KERNEL_GADGET_STORE_RDI8_RCX]},
+    {"or_rcx_eax", g_gadget_map_1270[KERNEL_GADGET_OR_RCX_EAX]},
+    {"set_dr7", g_gadget_map_1270[KERNEL_GADGET_SET_DR7]},
+    {"st_rcx_rdx", g_gadget_map_1270[KERNEL_GADGET_ST_RCX_RDX]},
+    {"st_rcx_rax", g_gadget_map_1270[KERNEL_GADGET_ST_RCX_RAX]},
+    {"mov_rax_rsi", g_gadget_map_1270[KERNEL_GADGET_MOV_RAX_RSI]},
+    {"mov_rax_rdi", g_gadget_map_1270[KERNEL_GADGET_MOV_RAX_RDI]},
+    {"rep_movsb", g_gadget_map_1270[KERNEL_GADGET_REP_MOVSB]},
     {"cld", g_gadget_map_1270[KERNEL_GADGET_CLD]},
+    {"ret_tramp", g_gadget_map_1270[KERNEL_GADGET_RET_TRAMP]},
+    {"dbreg_resume", g_gadget_map_1270[KERNEL_GADGET_DBREG_RESUME]},
     {"startup_call", g_sym_map_1270[KERNEL_SYM_HV_MP_STARTUP_CALL]},
+    {"mp_init_vector", g_sym_map_1270[KERNEL_SYM_MP_STARTUP_INIT_VECTOR]},
+    {"sleep_hook", g_sym_map_1270[KERNEL_SYM_ACPI_SLEEP_MACHDEP_HOOK]},
+    // Public kstuff-lite 12_70.h offsets converted from kdata-relative using
+    // the observed 0xD50000 text/data gap. Mapping checks do not verify bytes.
+    {"public_iretq", 0x2B34ADULL},
+    {"public_rep_movsb", 0x2EFC3AULL},
+    {"public_store_rax_rdi", 0x2ABF92ULL},
   };
   unsigned nx_count = 0;
   klog_printf("GPG1270,1,start,fw=0x%08x,text=0x%016" PRIx64
