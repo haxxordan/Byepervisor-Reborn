@@ -295,11 +295,13 @@ int main(void)
       kwrite64(pde_addr, pde);
     }
 
-    pte_addr = find_pte(kernel_pmap, addr, &pte);
-    if (pte_addr != 0xFFFFFFFFFFFFFFFFull) {
-      CLEAR_PDE_BIT(pte, XOTEXT);
-      SET_PDE_BIT(pte, RW);
-      kwrite64(pte_addr, pte);
+    if (pde_addr != 0xFFFFFFFFFFFFFFFFull && !PDE_FIELD(pde, PS)) {
+      pte_addr = find_pte(kernel_pmap, addr, &pte);
+      if (pte_addr != 0xFFFFFFFFFFFFFFFFull) {
+        CLEAR_PDE_BIT(pte, XOTEXT);
+        SET_PDE_BIT(pte, RW);
+        kwrite64(pte_addr, pte);
+      }
     }
   }
 
