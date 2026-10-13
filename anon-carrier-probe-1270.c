@@ -1,6 +1,9 @@
 #include <inttypes.h>
 #include <stdint.h>
 #include <sys/mman.h>
+#ifdef ANON_HOLD_1270
+#include <time.h>
+#endif
 #include <unistd.h>
 
 #include <ps5/kernel.h>
@@ -110,6 +113,9 @@ int main(void)
 
   unsigned low = 0, ram = 0, high = 0;
   uint64_t min_pa = UINT64_MAX, max_pa = 0, first_low = 0;
+#ifdef ANON_HOLD_1270
+  uint8_t *first_low_va = NULL;
+#endif
   int alias_match = 0;
   for (unsigned i = 0; i < total; ++i) {
     uint64_t pa = 0;
@@ -126,6 +132,9 @@ int main(void)
       ++low;
       if (first_low == 0) {
         first_low = pa;
+#ifdef ANON_HOLD_1270
+        first_low_va = buffer + i * PAGE_BYTES;
+#endif
         uint8_t observed = 0;
         alias_match = kernel_copyout((intptr_t)(dmap + pa), &observed, 1) == 0 &&
                       observed == buffer[i * PAGE_BYTES];
@@ -141,6 +150,82 @@ int main(void)
               ",first_low=0x%016" PRIx64 ",alias_match=%d\n",
               low, ram, high, min_pa, max_pa, first_low, alias_match);
   result = 0;
+
+#ifdef ANON_HOLD_1270
+  if (!first_low_va || !alias_match) {
+    klog_printf("ANONHOLD1270,1,stop,stage=no-low-page\n");
+    result = 1;
+    goto done;
+  }
+  int lock_rc = mlock(first_low_va, PAGE_BYTES);
+  klog_printf("ANONHOLD1270,1,lock,result=%d,pa=0x%016" PRIx64
+              ",va=0x%016" PRIx64 "\n", lock_rc, first_low,
+              (uint64_t)(uintptr_t)first_low_va);
+  if (lock_rc != 0) {
+    result = 1;
+    goto done;
+  }
+  const uint64_t marker = 0x3037323152524143ULL;
+  *(volatile uint64_t *)first_low_va = marker;
+  uint64_t observed = 0;
+  if (read64(dmap + first_low, &observed) != 0 || observed != marker) {
+    klog_printf("ANONHOLD1270,1,stop,stage=marker,observed=0x%016" PRIx64
+                "\n", observed);
+    result = 1;
+    goto unlock;
+  }
+  struct timespec previous = {0};
+  if (clock_gettime(CLOCK_REALTIME, &previous) != 0) {
+    klog_printf("ANONHOLD1270,1,stop,stage=clock\n");
+    result = 1;
+    goto unlock;
+  }
+  klog_printf("ANONHOLD1270,1,ready,pa=0x%016" PRIx64
+              ",marker=0x%016" PRIx64 ",wait_seconds=600\n",
+              first_low, marker);
+  unsigned resume_seen = 0;
+  for (unsigned i = 0; i < 600; ++i) {
+    sleep(1);
+    struct timespec now = {0};
+    if (clock_gettime(CLOCK_REALTIME, &now) != 0) {
+      klog_printf("ANONHOLD1270,1,stop,stage=clock-loop\n");
+      result = 1;
+      break;
+    }
+    int64_t gap = (int64_t)now.tv_sec - (int64_t)previous.tv_sec;
+    previous = now;
+    if (gap >= 10) {
+      uint64_t pa_after = 0, marker_after = 0;
+      int walk_rc = translate(dmap, upml4,
+                              (uint64_t)(uintptr_t)first_low_va, &pa_after);
+      int alias_rc = walk_rc == 0 && pa_after == first_low ?
+          read64(dmap + pa_after, &marker_after) : -1;
+      klog_printf("ANONHOLD1270,1,resume,gap_seconds=%" PRId64
+                  ",walk=%d,pa_before=0x%016" PRIx64
+                  ",pa_after=0x%016" PRIx64
+                  ",alias_read=%d,marker=0x%016" PRIx64
+                  ",match=%d\n", gap, walk_rc, first_low, pa_after,
+                  alias_rc, marker_after,
+                  alias_rc == 0 && marker_after == marker);
+      resume_seen = 1;
+      if (walk_rc != 0 || pa_after != first_low ||
+          alias_rc != 0 || marker_after != marker)
+        result = 1;
+      break;
+    }
+    if ((i + 1) % 30 == 0)
+      klog_printf("ANONHOLD1270,1,waiting,seconds=%u\n", i + 1);
+  }
+  if (!resume_seen && result == 0) {
+    klog_printf("ANONHOLD1270,1,timeout,no-resume-observed\n");
+    result = 1;
+  }
+unlock:;
+  int unlock_rc = munlock(first_low_va, PAGE_BYTES);
+  klog_printf("ANONHOLD1270,1,cleanup,munlock=%d\n", unlock_rc);
+  if (unlock_rc != 0)
+    result = 1;
+#endif
 
 done:;
   int unmap_rc = munmap(buffer, ALLOC_BYTES);
