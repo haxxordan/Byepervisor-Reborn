@@ -440,6 +440,14 @@ int kh_install(khook_t *kh, const kh_chain_t *handler)
 #endif
 
   off = 0;
+#if defined(AP_DIAG_PRESTAGE_1270) && defined(AP_DIAG_SECOND_MARKER_1270)
+  // Bounded second-dispatch test: leave evidence before the one-shot tail.
+  off = putq(bigbuf, off, kgadget(KERNEL_GADGET_POP_RCX));
+  off = putq(bigbuf, off, scratch + KH_OFF_USER);
+  off = putq(bigbuf, off, kgadget(KERNEL_GADGET_POP_RAX));
+  off = putq(bigbuf, off, 0x1270DBDB5EEDBEEFULL);
+  off = putq(bigbuf, off, kgadget(KERNEL_GADGET_ST_RCX_RAX));
+#endif
 #ifndef AP_DIAG_PRESTAGE_1270
   off = putq(bigbuf, off, kgadget(KERNEL_GADGET_MOV_RAX_RSI));   // rax = rsi
   off = putq(bigbuf, off, kgadget(KERNEL_GADGET_POP_RCX));

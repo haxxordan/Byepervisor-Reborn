@@ -66,7 +66,8 @@ static int user_pml4(uint64_t *pml4)
   return 0;
 }
 
-static int ap_identity_exec(uint64_t dmap, uint64_t pa)
+/* Checks the supplied guest CR3 only. It does not inspect root-0 NPT. */
+static int guest_identity_exec(uint64_t dmap, uint64_t pa)
 {
   uint64_t pml4e = 0, pdpte = 0, pde = 0;
   if (read64(dmap + 0x68000ULL, &pml4e) != 0 ||
@@ -111,7 +112,7 @@ int carrier1270_acquire(carrier1270_t *carrier, uint64_t dmap)
       continue;
     uint8_t alias_byte = 0;
     if (kernel_copyout((intptr_t)(dmap + pa), &alias_byte, 1) != 0 ||
-        alias_byte != page[0] || ap_identity_exec(dmap, pa) != 0)
+        alias_byte != page[0] || guest_identity_exec(dmap, pa) != 0)
       continue;
     if (mlock(page, PAGE_BYTES) != 0)
       goto fail;

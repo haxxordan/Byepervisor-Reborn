@@ -11,6 +11,10 @@
 #include <ps5/kernel.h>
 #include <sys/syscall.h>
 
+#if defined(AP_DIAGNOSTIC_1270) && defined(AP_DIAG_ENABLE_FULL_1270)
+#error "12.70 AP launch disabled: root-0 NPT execute permission and resume targets are unverified"
+#endif
+
 #include "kdlsym.h"
 #include "khook.h"
 #include "util.h"

@@ -42,6 +42,15 @@ cpu-tss-map-probe-1270.elf: cpu_tss_map_probe_1270.c
 cpu-tss-live-probe-1270.elf: cpu_tss_live_probe_1270.c
 	$(CC) $(CFLAGS) -o $@ cpu_tss_live_probe_1270.c
 
+sysent-getuid-probe-1270.elf: sysent_getuid_probe_1270.c
+	$(CC) $(CFLAGS) -o $@ sysent_getuid_probe_1270.c
+
+second-db-prepare-1270.elf: second_db_probe_1270.c khook.c kdlsym.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -DSECOND_DB_PREP_ONLY_1270 -o $@ $(filter %.c,$^)
+
+second-db-trigger-1270.elf: second_db_probe_1270.c khook.c kdlsym.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -o $@ $(filter %.c,$^)
+
 pivot-iret-prepare-1270.elf: pivot_iret_probe_1270.c kdlsym.c util.c include/offsets/12_70_candidate.h
 	$(CC) $(CFLAGS) -DPIVOT_PREP_ONLY_1270 -o $@ $(filter %.c,$^)
 
@@ -213,6 +222,8 @@ $(ELF): $(PAYLOAD_HDR) main.c kdlsym.c khook.c paging.c util.c include/offsets/1
 clean:
 	rm -f cpu-tss-map-probe-1270.elf
 	rm -f cpu-tss-live-probe-1270.elf
+	rm -f sysent-getuid-probe-1270.elf
+	rm -f second-db-prepare-1270.elf second-db-trigger-1270.elf
 	rm -f pivot-iret-prepare-1270.elf pivot-iret-trigger-1270.elf
 	rm -f pivot-pop-rax-prepare-1270.elf pivot-pop-rax-trigger-1270.elf
 	rm -f pivot-dbreg-prepare-1270.elf pivot-dbreg-trigger-1270.elf
@@ -249,6 +260,7 @@ clean:
 	rm -f gpuvm-xotext-db-probe-1270.elf
 	rm -f byepervisor_1270_diag.elf
 	rm -f byepervisor_1270_prestage_diag.elf
+	rm -f byepervisor_1270_ap_readonly_diag.elf
 	rm -f byepervisor_1270_prep_only.elf
 	rm -f byepervisor_1270_install_only.elf
 	rm -f byepervisor_1270_trigger_only.elf
