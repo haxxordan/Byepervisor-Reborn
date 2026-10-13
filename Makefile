@@ -32,6 +32,9 @@ CFLAGS := -Wall -Werror -Wno-unused-function -g -I./include
 
 all: $(ELF)
 
+preflight-1270.elf: preflight_1270.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -o $@ preflight_1270.c
+
 $(PAYLOAD_HDR): $(PAYLOAD_DIR)/break_hv.c $(PAYLOAD_DIR)/entry.S $(PAYLOAD_DIR)/link.ld
 	sh $(PAYLOAD_DIR)/build.sh
 
@@ -40,6 +43,7 @@ $(ELF): $(PAYLOAD_HDR) main.c kdlsym.c khook.c paging.c util.c
 
 clean:
 	rm -f $(ELF)
+	rm -f preflight-1270.elf
 	rm -f $(PAYLOAD_DIR)/break_hv.h $(PAYLOAD_DIR)/break_hv.bin $(PAYLOAD_DIR)/break_hv.elf $(PAYLOAD_DIR)/*.o
 
 test: $(ELF)

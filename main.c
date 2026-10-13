@@ -175,6 +175,12 @@ int main(void)
   fw = kernel_get_fw_version();
   printf("[+] Detected firmware: %x.%x\n", (fw & 0xFF000000) >> 0x18, (fw & 0x00FF0000) >> 0x10);
 
+  if ((fw & 0xffff0000U) == 0x12700000U) {
+    printf("[!] 12.70 offsets are staged for review; HV path is disabled\n");
+    notifyf("Byepervisor Reborn 12.70\nCandidate offsets staged; HV path disabled");
+    return 2;
+  }
+
   if (kdlsym(KERNEL_SYM_HV_MP_STARTUP_CALL) == 0) {
     printf("[!] Undetected firmware, exiting!\n");
     notifyf("[ERROR] Byepervisor Reborn\nFirmware is not supported :(\n");
