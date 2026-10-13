@@ -82,7 +82,7 @@ int main(void)
 
   uint64_t facs_global = data + FACS_CANDIDATE;
   uint64_t fadt_global = facs_global - FADT_DELTA;
-  uint8_t fadt[0x90] = {0};
+  uint8_t fadt[0xa0] = {0};
   uint64_t facs_ptr = 0, dsdt_ptr = 0;
   uint32_t dsdt_header_sig = 0;
   klog_printf("FACS1270,1,start,fw=0x%08x,data=0x%016" PRIx64
@@ -98,20 +98,33 @@ int main(void)
     return 1;
   }
 
-  uint32_t sig = get_u32(fadt, 0);
-  uint32_t length = get_u32(fadt, 4);
-  uint32_t firmware_ctrl = get_u32(fadt, 0x24);
-  uint32_t dsdt_pa = get_u32(fadt, 0x28);
-  uint64_t x_firmware_ctrl = get_u64(fadt, 0x84);
-  unsigned facs_match = sig == FADT_SIG && length >= 0x8c &&
+  unsigned header_offset = sizeof(fadt);
+  for (unsigned i = 0; i <= 0x10; i++) {
+    if (get_u32(fadt, i) == FADT_SIG) {
+      header_offset = i;
+      break;
+    }
+  }
+  uint32_t sig = header_offset < sizeof(fadt) ?
+                 get_u32(fadt, header_offset) : get_u32(fadt, 0);
+  uint32_t length = header_offset < sizeof(fadt) ?
+                    get_u32(fadt, header_offset + 4) : 0;
+  uint32_t firmware_ctrl = header_offset < sizeof(fadt) ?
+                           get_u32(fadt, header_offset + 0x24) : 0;
+  uint32_t dsdt_pa = header_offset < sizeof(fadt) ?
+                     get_u32(fadt, header_offset + 0x28) : 0;
+  uint64_t x_firmware_ctrl = header_offset < sizeof(fadt) ?
+                             get_u64(fadt, header_offset + 0x84) : 0;
+  unsigned facs_match = header_offset <= 0x10 && length >= 0x8c &&
                         length <= 0x1000 && firmware_ctrl >= 0x1000 &&
                         facs_ptr == dmap + firmware_ctrl;
   unsigned dsdt_match = dsdt_pa >= 0x1000 &&
                         dsdt_ptr == dmap + dsdt_pa &&
                         dsdt_header_sig == DSDT_SIG;
-  klog_printf("FACS1270,1,fadt,va=0x%016" PRIx64 ",sig=0x%08x"
+  klog_printf("FACS1270,1,fadt,window=0x%016" PRIx64
+              ",header_offset=%u,sig=0x%08x"
               ",length=%u,firmware_ctrl=0x%08x,x_firmware_ctrl=0x%016" PRIx64
-              ",dsdt_pa=0x%08x\n", fadt_global, sig, length,
+              ",dsdt_pa=0x%08x\n", fadt_global, header_offset, sig, length,
               firmware_ctrl, x_firmware_ctrl, dsdt_pa);
   klog_printf("FACS1270,1,globals,facs_ptr=0x%016" PRIx64
               ",dsdt_ptr=0x%016" PRIx64 ",dsdt_header_sig=0x%08x"
