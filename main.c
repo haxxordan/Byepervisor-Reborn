@@ -178,6 +178,7 @@ int main(void)
   if (kdlsym(KERNEL_SYM_HV_MP_STARTUP_CALL) == 0) {
     printf("[!] Undetected firmware, exiting!\n");
     notifyf("[ERROR] Byepervisor Reborn\nFirmware is not supported :(\n");
+    return 1;
   }
 
   // The hypervisor loader's base physical address changes depending on if its a regular or a pro unit
@@ -210,11 +211,6 @@ int main(void)
 
     printf("Here's a dump of some HV strings (hvcore+0x19830)!\n");
     kHexDump(kdldmap(g_hv_base_pa + 0x72830), 0x60);
-
-    kwrite64(ktext(8), 0x41414141);
-
-    printf("Edited kernel .text\n");
-    kHexDump(ktext(0), 0x60);
 
     test_val = kread64(ktext(0));
     test_val_bytes = (uint8_t *) &test_val;
