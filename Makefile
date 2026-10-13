@@ -66,6 +66,9 @@ anon-carrier-probe-1270.elf: anon-carrier-probe-1270.c include/offsets/12_70_can
 anon-carrier-hold-probe-1270.elf: anon-carrier-probe-1270.c include/offsets/12_70_candidate.h
 	$(CC) $(CFLAGS) -DANON_HOLD_1270 -o $@ anon-carrier-probe-1270.c
 
+ap-cr3-probe-1270.elf: ap-cr3-probe-1270.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -o $@ ap-cr3-probe-1270.c
+
 gpuvm-preflight-1270.elf: gpuvm_preflight_1270.c include/offsets/12_70_candidate.h
 	$(CC) $(CFLAGS) -o $@ gpuvm_preflight_1270.c
 
@@ -118,6 +121,7 @@ clean:
 	rm -f owned-carrier-map-probe-1270.elf
 	rm -f anon-carrier-probe-1270.elf
 	rm -f anon-carrier-hold-probe-1270.elf
+	rm -f ap-cr3-probe-1270.elf
 	rm -f gpuvm-preflight-1270.elf
 	rm -f gpuvm-map-probe-1270.elf
 	rm -f gpuvm-dma-probe-1270.elf
