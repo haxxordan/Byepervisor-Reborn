@@ -1,4 +1,6 @@
 *.elf
 *.o
+*.bin
+/break_hv_payload/break_hv_diag.h
 *~
 
