@@ -119,6 +119,7 @@ static int diag_save_line(const char *line, int create)
 #define HV_LOADER_PA_REGULAR      0x062800000
 #define HV_LOADER_PA_PRO          0x8e0800000
 #define HOOK_INSTALL_ONLY_DONE    100
+#define HOOK_TRIGGER_ONLY_DONE    101
 
 #ifdef AP_DIAGNOSTIC_1270
 static int restore_diag_carrier(uint64_t pmap, uint64_t original)
@@ -286,6 +287,9 @@ static int install_resume_hook(int core_id, uint64_t cave, uint64_t cr3)
 #ifdef AP_DIAG_PRESTAGE_1270
   klog("P1270DIAG,1,hook,after-trigger\n");
   diag_save_line("hook,after-trigger\n", 0);
+#ifdef AP_DIAG_TRIGGER_ONLY_1270
+  return HOOK_TRIGGER_ONLY_DONE;
+#endif
 #endif
   return 0;
 }
@@ -359,7 +363,8 @@ int main(void)
     return 2;
   }
 #if defined(AP_DIAG_PRESTAGE_1270) && !defined(AP_DIAG_PREP_ONLY_1270) && \
-    !defined(AP_DIAG_INSTALL_ONLY_1270) && !defined(AP_DIAG_ENABLE_FULL_1270)
+    !defined(AP_DIAG_INSTALL_ONLY_1270) && \
+    !defined(AP_DIAG_TRIGGER_ONLY_1270) && !defined(AP_DIAG_ENABLE_FULL_1270)
   klog("P1270DIAG,1,stop,stage=full-hook-disabled-after-kp\n");
   notifyf("12.70 full AP hook diagnostic disabled after KP");
   return 2;
@@ -670,6 +675,21 @@ int main(void)
            carrier_result);
       DIAG_RELEASE();
       return carrier_result == 0 ? 0 : 19;
+    }
+#endif
+#ifdef AP_DIAG_TRIGGER_ONLY_1270
+    if (r == HOOK_TRIGGER_ONLY_DONE) {
+      int hook_result = uninstall_hook(HOOK_CORE, cave);
+      int carrier_result = restore_diag_carrier(kernel_pmap,
+                                                carrier_pml4e_saved);
+      snprintf(diag_line, sizeof(diag_line),
+               "end,trigger-only=1,hook_restore=%d,carrier_restore=%d\n",
+               hook_result, carrier_result);
+      diag_save_line(diag_line, 0);
+      klog("P1270DIAG,1,end,trigger-only=1,hook_restore=%d,carrier_restore=%d\n",
+           hook_result, carrier_result);
+      DIAG_RELEASE();
+      return hook_result == 0 && carrier_result == 0 ? 0 : 20;
     }
 #endif
     if (r) {
