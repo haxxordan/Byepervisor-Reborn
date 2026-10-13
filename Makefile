@@ -36,6 +36,9 @@ all: $(ELF)
 preflight-1270.elf: preflight_1270.c include/offsets/12_70_candidate.h
 	$(CC) $(CFLAGS) -o $@ preflight_1270.c
 
+facs-preflight-1270.elf: facs_preflight_1270.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -o $@ facs_preflight_1270.c
+
 gadget-page-probe-1270.elf: gadget_page_probe_1270.c include/offsets/12_70_candidate.h
 	$(CC) $(CFLAGS) -o $@ gadget_page_probe_1270.c
 
@@ -78,6 +81,7 @@ $(ELF): $(PAYLOAD_HDR) main.c kdlsym.c khook.c paging.c util.c include/offsets/1
 clean:
 	rm -f $(ELF)
 	rm -f preflight-1270.elf
+	rm -f facs-preflight-1270.elf
 	rm -f gadget-page-probe-1270.elf
 	rm -f gpuvm-preflight-1270.elf
 	rm -f gpuvm-map-probe-1270.elf
