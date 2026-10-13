@@ -1,5 +1,10 @@
 #include <inttypes.h>
 #include <stdint.h>
+#ifdef CARR_SAVE_1270
+#include <errno.h>
+#include <fcntl.h>
+#include <unistd.h>
+#endif
 #ifdef CARR_LAYOUT_1270
 #include <unistd.h>
 #endif
@@ -72,6 +77,31 @@ int main(void)
               ",hash=0x%016" PRIx64 ",zero=%u,ff=%u"
               ",first=0x%016" PRIx64 ",last=0x%016" PRIx64 "\n",
               carrier, hash_bytes(page, PAGE_BYTES), zero, ff, first, last);
+#ifdef CARR_SAVE_1270
+  const char *path = "/mnt/usb0/PS5-12.70-carrier-3ffff000.bin";
+  int fd = open(path, O_WRONLY | O_CREAT | O_EXCL, 0600);
+  if (fd < 0) {
+    klog_printf("CARRSAVE1270,1,stop,stage=open,errno=%d\n", errno);
+    return 1;
+  }
+  unsigned written = 0;
+  while (written < PAGE_BYTES) {
+    ssize_t n = write(fd, page + written, PAGE_BYTES - written);
+    if (n <= 0) {
+      klog_printf("CARRSAVE1270,1,stop,stage=write,bytes=%u,errno=%d\n",
+                  written, errno);
+      close(fd);
+      return 1;
+    }
+    written += (unsigned)n;
+  }
+  int fsync_rc = fsync(fd);
+  int close_rc = close(fd);
+  klog_printf("CARRSAVE1270,1,output,path=%s,bytes=%u,fsync=%d,close=%d\n",
+              path, written, fsync_rc, close_rc);
+  if (fsync_rc != 0 || close_rc != 0)
+    return 1;
+#endif
 #ifdef CARR_LAYOUT_1270
   for (unsigned chunk = 0; chunk < PAGE_BYTES / 0x100; ++chunk) {
     const uint8_t *part = page + chunk * 0x100;
