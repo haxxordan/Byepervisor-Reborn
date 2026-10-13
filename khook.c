@@ -520,6 +520,19 @@ int kh_trigger(khook_t *kh)
       kwrite_q(kh, kh->arm_rsp_slot, resume_rsp) != 0)
     return -2;
 
+#ifdef AP_DIAG_TRIGGER_PREP_ONLY_1270
+  // Check the three context writes without setting TF or entering #DB.
+  uint64_t observed = 0;
+  if (kh->read(kh->scratch_base + KH_OFF_RESUME + KH_RC_RBP,
+               &observed, sizeof observed) != 0 || observed != rbp_val ||
+      kh->read(kh->arm_rip_slot, &observed, sizeof observed) != 0 ||
+      observed != (uint64_t)resume_label ||
+      kh->read(kh->arm_rsp_slot, &observed, sizeof observed) != 0 ||
+      observed != resume_rsp)
+    return -3;
+  return 0;
+#endif
+
 #ifdef AP_DIAG_PRESTAGE_1270
   // The diagnostic arm chain starts at DBREG_RESUME. Supply its context in
   // RDI before single stepping so it never executes the 12.70 NX POP_RDI.

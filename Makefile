@@ -123,6 +123,9 @@ byepervisor_1270_install_only.elf: $(DIAG_HDR) main.c kdlsym.c khook.c paging.c 
 byepervisor_1270_trigger_only.elf: $(DIAG_HDR) main.c kdlsym.c khook.c paging.c util.c carrier_1270.c include/carrier_1270.h include/offsets/12_70_candidate.h
 	$(CC) $(CFLAGS) -DAP_DIAGNOSTIC_1270 -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_TRIGGER_ONLY_1270 -o $@ $(filter %.c,$^)
 
+byepervisor_1270_trigger_prepare_only.elf: $(DIAG_HDR) main.c kdlsym.c khook.c paging.c util.c carrier_1270.c include/carrier_1270.h include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DAP_DIAGNOSTIC_1270 -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_TRIGGER_ONLY_1270 -DAP_DIAG_TRIGGER_PREP_ONLY_1270 -o $@ $(filter %.c,$^)
+
 $(PAYLOAD_HDR): $(PAYLOAD_DIR)/break_hv.c $(PAYLOAD_DIR)/entry.S $(PAYLOAD_DIR)/link.ld
 	sh $(PAYLOAD_DIR)/build.sh
 
@@ -157,6 +160,7 @@ clean:
 	rm -f byepervisor_1270_prep_only.elf
 	rm -f byepervisor_1270_install_only.elf
 	rm -f byepervisor_1270_trigger_only.elf
+	rm -f byepervisor_1270_trigger_prepare_only.elf
 	rm -f $(PAYLOAD_DIR)/break_hv_diag.h $(PAYLOAD_DIR)/break_hv_diag.bin $(PAYLOAD_DIR)/break_hv_diag.elf $(PAYLOAD_DIR)/break_hv_diag.o
 	rm -f $(PAYLOAD_DIR)/break_hv.h $(PAYLOAD_DIR)/break_hv.bin $(PAYLOAD_DIR)/break_hv.elf $(PAYLOAD_DIR)/*.o
 

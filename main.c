@@ -285,8 +285,15 @@ static int install_resume_hook(int core_id, uint64_t cave, uint64_t cr3)
     return ret;
   }
 #ifdef AP_DIAG_PRESTAGE_1270
+#ifdef AP_DIAG_TRIGGER_PREP_ONLY_1270
+  klog("P1270DIAG,1,cpu,stage=after-trigger-prepare,requested=%d,observed=%d\n",
+       HOOK_CORE, get_cpu_core());
+  klog("P1270DIAG,1,hook,after-trigger-prepare\n");
+  diag_save_line("hook,after-trigger-prepare\n", 0);
+#else
   klog("P1270DIAG,1,hook,after-trigger\n");
   diag_save_line("hook,after-trigger\n", 0);
+#endif
 #ifdef AP_DIAG_TRIGGER_ONLY_1270
   return HOOK_TRIGGER_ONLY_DONE;
 #endif
@@ -433,6 +440,10 @@ int main(void)
     printf("[!] Could not pin to hook core\n");
     return 3;
   }
+#ifdef AP_DIAG_TRIGGER_PREP_ONLY_1270
+  klog("P1270DIAG,1,cpu,stage=after-pin,requested=%d,observed=%d\n",
+       HOOK_CORE, get_cpu_core());
+#endif
 
   // This is so we can send the same payload after resume to experiment with post-HV hax (or not if we want to debug the resume payload)
 #define DEBUG_MP_STARTUP_PAYLOAD 0
@@ -593,8 +604,13 @@ int main(void)
   return prep_ok ? 0 : 6;
 #endif
 #ifndef AP_DIAG_PREP_ONLY_1270
+#ifdef AP_DIAG_TRIGGER_PREP_ONLY_1270
+  snprintf(diag_output_path, sizeof(diag_output_path),
+           "/mnt/usb0/PS5-12.70-trigger-prep-%d.txt", (int)getpid());
+#else
   snprintf(diag_output_path, sizeof(diag_output_path),
            "/mnt/usb0/PS5-12.70-ap-diag-%d.txt", (int)getpid());
+#endif
   snprintf(diag_line, sizeof(diag_line),
            "prepared,pid=%d,pa=0x%016lx,image_bytes=%u\n",
            (int)getpid(), diag_owned_carrier.pa, break_hv_len);
@@ -682,12 +698,23 @@ int main(void)
       int hook_result = uninstall_hook(HOOK_CORE, cave);
       int carrier_result = restore_diag_carrier(kernel_pmap,
                                                 carrier_pml4e_saved);
+#ifdef AP_DIAG_TRIGGER_PREP_ONLY_1270
+      snprintf(diag_line, sizeof(diag_line),
+               "end,trigger-prepare-only=1,hook_restore=%d,carrier_restore=%d\n",
+               hook_result, carrier_result);
+#else
       snprintf(diag_line, sizeof(diag_line),
                "end,trigger-only=1,hook_restore=%d,carrier_restore=%d\n",
                hook_result, carrier_result);
+#endif
       diag_save_line(diag_line, 0);
+#ifdef AP_DIAG_TRIGGER_PREP_ONLY_1270
+      klog("P1270DIAG,1,end,trigger-prepare-only=1,hook_restore=%d,carrier_restore=%d\n",
+           hook_result, carrier_result);
+#else
       klog("P1270DIAG,1,end,trigger-only=1,hook_restore=%d,carrier_restore=%d\n",
            hook_result, carrier_result);
+#endif
       DIAG_RELEASE();
       return hook_result == 0 && carrier_result == 0 ? 0 : 20;
     }
