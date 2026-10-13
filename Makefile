@@ -48,6 +48,9 @@ carrier-read-probe-1270.elf: carrier-read-probe-1270.c include/offsets/12_70_can
 carrier-layout-probe-1270.elf: carrier-read-probe-1270.c include/offsets/12_70_candidate.h
 	$(CC) $(CFLAGS) -DCARR_LAYOUT_1270 -o $@ carrier-read-probe-1270.c
 
+owned-carrier-probe-1270.elf: owned-carrier-probe-1270.c
+	$(CC) $(CFLAGS) -o $@ owned-carrier-probe-1270.c
+
 gpuvm-preflight-1270.elf: gpuvm_preflight_1270.c include/offsets/12_70_candidate.h
 	$(CC) $(CFLAGS) -o $@ gpuvm_preflight_1270.c
 
@@ -94,6 +97,7 @@ clean:
 	rm -f gadget-page-probe-1270.elf
 	rm -f carrier-read-probe-1270.elf
 	rm -f carrier-layout-probe-1270.elf
+	rm -f owned-carrier-probe-1270.elf
 	rm -f gpuvm-preflight-1270.elf
 	rm -f gpuvm-map-probe-1270.elf
 	rm -f gpuvm-dma-probe-1270.elf
