@@ -66,6 +66,9 @@ anon-carrier-probe-1270.elf: anon-carrier-probe-1270.c include/offsets/12_70_can
 anon-carrier-hold-probe-1270.elf: anon-carrier-probe-1270.c include/offsets/12_70_candidate.h
 	$(CC) $(CFLAGS) -DANON_HOLD_1270 -o $@ anon-carrier-probe-1270.c
 
+anon-carrier-stage-probe-1270.elf: anon-carrier-probe-1270.c include/offsets/12_70_candidate.h $(DIAG_HDR)
+	$(CC) $(CFLAGS) -DANON_STAGE_1270 -o $@ anon-carrier-probe-1270.c
+
 ap-cr3-probe-1270.elf: ap-cr3-probe-1270.c include/offsets/12_70_candidate.h
 	$(CC) $(CFLAGS) -o $@ ap-cr3-probe-1270.c
 
@@ -99,8 +102,14 @@ $(DIAG_HDR): $(PAYLOAD_DIR)/break_hv_diag.c $(PAYLOAD_DIR)/entry.S $(PAYLOAD_DIR
 byepervisor_1270_diag.elf: $(DIAG_HDR) main.c kdlsym.c khook.c paging.c util.c include/offsets/12_70_candidate.h
 	$(CC) $(CFLAGS) -DAP_DIAGNOSTIC_1270 -o $@ $(filter %.c,$^)
 
-byepervisor_1270_prestage_diag.elf: $(DIAG_HDR) main.c kdlsym.c khook.c paging.c util.c include/offsets/12_70_candidate.h
+byepervisor_1270_prestage_diag.elf: $(DIAG_HDR) main.c kdlsym.c khook.c paging.c util.c carrier_1270.c include/carrier_1270.h include/offsets/12_70_candidate.h
 	$(CC) $(CFLAGS) -DAP_DIAGNOSTIC_1270 -DAP_DIAG_PRESTAGE_1270 -o $@ $(filter %.c,$^)
+
+byepervisor_1270_prep_only.elf: $(DIAG_HDR) main.c kdlsym.c khook.c paging.c util.c carrier_1270.c include/carrier_1270.h include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DAP_DIAGNOSTIC_1270 -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_PREP_ONLY_1270 -o $@ $(filter %.c,$^)
+
+byepervisor_1270_install_only.elf: $(DIAG_HDR) main.c kdlsym.c khook.c paging.c util.c carrier_1270.c include/carrier_1270.h include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DAP_DIAGNOSTIC_1270 -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_INSTALL_ONLY_1270 -o $@ $(filter %.c,$^)
 
 $(PAYLOAD_HDR): $(PAYLOAD_DIR)/break_hv.c $(PAYLOAD_DIR)/entry.S $(PAYLOAD_DIR)/link.ld
 	sh $(PAYLOAD_DIR)/build.sh
@@ -121,6 +130,7 @@ clean:
 	rm -f owned-carrier-map-probe-1270.elf
 	rm -f anon-carrier-probe-1270.elf
 	rm -f anon-carrier-hold-probe-1270.elf
+	rm -f anon-carrier-stage-probe-1270.elf
 	rm -f ap-cr3-probe-1270.elf
 	rm -f gpuvm-preflight-1270.elf
 	rm -f gpuvm-map-probe-1270.elf
@@ -132,6 +142,8 @@ clean:
 	rm -f gpuvm-xotext-db-probe-1270.elf
 	rm -f byepervisor_1270_diag.elf
 	rm -f byepervisor_1270_prestage_diag.elf
+	rm -f byepervisor_1270_prep_only.elf
+	rm -f byepervisor_1270_install_only.elf
 	rm -f $(PAYLOAD_DIR)/break_hv_diag.h $(PAYLOAD_DIR)/break_hv_diag.bin $(PAYLOAD_DIR)/break_hv_diag.elf $(PAYLOAD_DIR)/break_hv_diag.o
 	rm -f $(PAYLOAD_DIR)/break_hv.h $(PAYLOAD_DIR)/break_hv.bin $(PAYLOAD_DIR)/break_hv.elf $(PAYLOAD_DIR)/*.o
 

