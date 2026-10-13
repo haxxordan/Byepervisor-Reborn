@@ -58,8 +58,7 @@ int pin_to_core(int num)
   mask[1] = 0;
   cpuset_setaffinity(3, 3, new_id, 8, (const cpuset_t *) mask);
   
-  // Sony system so code that makes sense must be commented out
-  //mask[0] = (1 << num);
+  // Sony affinity bits run in reverse order from per-CPU/TSS array rows.
   mask[0] = 1 << (15 - num);
   mask[1] = 0;
   return cpuset_setaffinity(3, 1, -1, 0x10, (const cpuset_t *) mask);

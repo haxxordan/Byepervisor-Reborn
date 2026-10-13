@@ -440,6 +440,23 @@ int main(void)
     printf("[!] Could not pin to hook core\n");
     return 3;
   }
+#if defined(AP_DIAG_PRESTAGE_1270) && !defined(AP_DIAG_PREP_ONLY_1270)
+  int observed_hook_cpu = get_cpu_core();
+  intptr_t current_thread = kernel_get_proc_thread(getpid(), -1);
+  uint64_t row_thread = 0;
+  uint64_t pcpu_row = (uint64_t)KERNEL_ADDRESS_DATA_BASE + 0x2e9cf00ULL +
+                      (uint64_t)HOOK_CORE * 0x980ULL;
+  int row_read = kread(pcpu_row, &row_thread, sizeof(row_thread));
+  klog("P1270DIAG,1,cpu,stage=pin-check,tss_row=%d,reported=%d,"
+       "thread=0x%016lx,row_thread=0x%016lx,read=%d\n",
+       HOOK_CORE, observed_hook_cpu, (uint64_t)current_thread,
+       row_thread, row_read);
+  if (!current_thread || row_read != 0 ||
+      row_thread != (uint64_t)current_thread) {
+    klog("P1270DIAG,1,stop,stage=hook-thread-not-on-tss-row\n");
+    return 3;
+  }
+#endif
 #ifdef AP_DIAG_TRIGGER_PREP_ONLY_1270
   klog("P1270DIAG,1,cpu,stage=after-pin,requested=%d,observed=%d\n",
        HOOK_CORE, get_cpu_core());
@@ -604,12 +621,22 @@ int main(void)
   return prep_ok ? 0 : 6;
 #endif
 #ifndef AP_DIAG_PREP_ONLY_1270
+  struct timespec diag_run_time = {0};
+  if (clock_gettime(CLOCK_REALTIME, &diag_run_time) != 0) {
+    klog("P1270DIAG,1,stop,stage=run-clock\n");
+    DIAG_RELEASE();
+    return 6;
+  }
 #ifdef AP_DIAG_TRIGGER_PREP_ONLY_1270
   snprintf(diag_output_path, sizeof(diag_output_path),
-           "/mnt/usb0/PS5-12.70-trigger-prep-%d.txt", (int)getpid());
+           "/mnt/usb0/PS5-12.70-trigger-prep-%d-%ld-%ld.txt",
+           (int)getpid(), (long)diag_run_time.tv_sec,
+           (long)diag_run_time.tv_nsec);
 #else
   snprintf(diag_output_path, sizeof(diag_output_path),
-           "/mnt/usb0/PS5-12.70-ap-diag-%d.txt", (int)getpid());
+           "/mnt/usb0/PS5-12.70-ap-diag-%d-%ld-%ld.txt",
+           (int)getpid(), (long)diag_run_time.tv_sec,
+           (long)diag_run_time.tv_nsec);
 #endif
   snprintf(diag_line, sizeof(diag_line),
            "prepared,pid=%d,pa=0x%016lx,image_bytes=%u\n",

@@ -36,6 +36,84 @@ all: $(ELF)
 preflight-1270.elf: preflight_1270.c include/offsets/12_70_candidate.h
 	$(CC) $(CFLAGS) -o $@ preflight_1270.c
 
+cpu-tss-map-probe-1270.elf: cpu_tss_map_probe_1270.c
+	$(CC) $(CFLAGS) -o $@ cpu_tss_map_probe_1270.c
+
+cpu-tss-live-probe-1270.elf: cpu_tss_live_probe_1270.c
+	$(CC) $(CFLAGS) -o $@ cpu_tss_live_probe_1270.c
+
+pivot-iret-prepare-1270.elf: pivot_iret_probe_1270.c kdlsym.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DPIVOT_PREP_ONLY_1270 -o $@ $(filter %.c,$^)
+
+pivot-iret-trigger-1270.elf: pivot_iret_probe_1270.c kdlsym.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -o $@ $(filter %.c,$^)
+
+pivot-pop-rax-prepare-1270.elf: pivot_iret_probe_1270.c kdlsym.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DPIVOT_POP_RAX_1270 -DPIVOT_PREP_ONLY_1270 -o $@ $(filter %.c,$^)
+
+pivot-pop-rax-trigger-1270.elf: pivot_iret_probe_1270.c kdlsym.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DPIVOT_POP_RAX_1270 -o $@ $(filter %.c,$^)
+
+pivot-dbreg-prepare-1270.elf: pivot_iret_probe_1270.c kdlsym.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DPIVOT_DBREG_1270 -DPIVOT_PREP_ONLY_1270 -o $@ $(filter %.c,$^)
+
+pivot-dbreg-trigger-1270.elf: pivot_iret_probe_1270.c kdlsym.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DPIVOT_DBREG_1270 -o $@ $(filter %.c,$^)
+
+pivot-candidate-iret-prepare-1270.elf: pivot_iret_probe_1270.c kdlsym.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DPIVOT_CANDIDATE_IRET_1270 -DPIVOT_PREP_ONLY_1270 -o $@ $(filter %.c,$^)
+
+pivot-candidate-iret-trigger-1270.elf: pivot_iret_probe_1270.c kdlsym.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DPIVOT_CANDIDATE_IRET_1270 -o $@ $(filter %.c,$^)
+
+pivot-continuation-prepare-1270.elf: pivot_iret_probe_1270.c kdlsym.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DPIVOT_DBREG_CONT_1270 -DPIVOT_PREP_ONLY_1270 -o $@ $(filter %.c,$^)
+
+pivot-continuation-trigger-1270.elf: pivot_iret_probe_1270.c kdlsym.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DPIVOT_DBREG_CONT_1270 -o $@ $(filter %.c,$^)
+
+pivot-continuation-alt-prepare-1270.elf: pivot_iret_probe_1270.c kdlsym.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DPIVOT_DBREG_CONT_1270 -DPIVOT_CONT_ALT_1270 -DPIVOT_PREP_ONLY_1270 -o $@ $(filter %.c,$^)
+
+pivot-continuation-alt-trigger-1270.elf: pivot_iret_probe_1270.c kdlsym.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DPIVOT_DBREG_CONT_1270 -DPIVOT_CONT_ALT_1270 -o $@ $(filter %.c,$^)
+
+pivot-pop-rcx-prepare-1270.elf: pivot_iret_probe_1270.c kdlsym.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DPIVOT_FIRST_POP_1270 -DPIVOT_FIRST_POP_OFF=0x3410d2ULL -DPIVOT_PREP_ONLY_1270 -o $@ $(filter %.c,$^)
+
+pivot-pop-rcx-trigger-1270.elf: pivot_iret_probe_1270.c kdlsym.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DPIVOT_FIRST_POP_1270 -DPIVOT_FIRST_POP_OFF=0x3410d2ULL -o $@ $(filter %.c,$^)
+
+pivot-pop-r8-prepare-1270.elf: pivot_iret_probe_1270.c kdlsym.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DPIVOT_FIRST_POP_1270 -DPIVOT_FIRST_POP_OFF=0x7dedbfULL -DPIVOT_PREP_ONLY_1270 -o $@ $(filter %.c,$^)
+
+pivot-pop-r8-trigger-1270.elf: pivot_iret_probe_1270.c kdlsym.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DPIVOT_FIRST_POP_1270 -DPIVOT_FIRST_POP_OFF=0x7dedbfULL -o $@ $(filter %.c,$^)
+
+pivot-store-rcx-rax-prepare-1270.elf: pivot_iret_probe_1270.c kdlsym.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DPIVOT_STORE_RCX_RAX_1270 -DPIVOT_PREP_ONLY_1270 -o $@ $(filter %.c,$^)
+
+pivot-store-rcx-rax-trigger-1270.elf: pivot_iret_probe_1270.c kdlsym.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DPIVOT_STORE_RCX_RAX_1270 -o $@ $(filter %.c,$^)
+
+pivot-set-dr7-prepare-1270.elf: pivot_iret_probe_1270.c kdlsym.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DPIVOT_SET_DR7_1270 -DPIVOT_PREP_ONLY_1270 -o $@ $(filter %.c,$^)
+
+pivot-set-dr7-trigger-1270.elf: pivot_iret_probe_1270.c kdlsym.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DPIVOT_SET_DR7_1270 -o $@ $(filter %.c,$^)
+
+pivot-pop-pair-prepare-1270.elf: pivot_iret_probe_1270.c kdlsym.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DPIVOT_POP_PAIR_1270 -DPIVOT_PREP_ONLY_1270 -o $@ $(filter %.c,$^)
+
+pivot-pop-pair-trigger-1270.elf: pivot_iret_probe_1270.c kdlsym.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DPIVOT_POP_PAIR_1270 -o $@ $(filter %.c,$^)
+
+pivot-pop-rsp-prepare-1270.elf: pivot_iret_probe_1270.c kdlsym.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DPIVOT_POP_RSP_1270 -DPIVOT_PREP_ONLY_1270 -o $@ $(filter %.c,$^)
+
+pivot-pop-rsp-trigger-1270.elf: pivot_iret_probe_1270.c kdlsym.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DPIVOT_POP_RSP_1270 -o $@ $(filter %.c,$^)
+
 facs-preflight-1270.elf: facs_preflight_1270.c include/offsets/12_70_candidate.h
 	$(CC) $(CFLAGS) -o $@ facs_preflight_1270.c
 
@@ -133,6 +211,20 @@ $(ELF): $(PAYLOAD_HDR) main.c kdlsym.c khook.c paging.c util.c include/offsets/1
 	$(CC) $(CFLAGS) -o $@ $(filter %.c,$^)
 
 clean:
+	rm -f cpu-tss-map-probe-1270.elf
+	rm -f cpu-tss-live-probe-1270.elf
+	rm -f pivot-iret-prepare-1270.elf pivot-iret-trigger-1270.elf
+	rm -f pivot-pop-rax-prepare-1270.elf pivot-pop-rax-trigger-1270.elf
+	rm -f pivot-dbreg-prepare-1270.elf pivot-dbreg-trigger-1270.elf
+	rm -f pivot-candidate-iret-prepare-1270.elf pivot-candidate-iret-trigger-1270.elf
+	rm -f pivot-continuation-prepare-1270.elf pivot-continuation-trigger-1270.elf
+	rm -f pivot-continuation-alt-prepare-1270.elf pivot-continuation-alt-trigger-1270.elf
+	rm -f pivot-pop-rcx-prepare-1270.elf pivot-pop-rcx-trigger-1270.elf
+	rm -f pivot-pop-r8-prepare-1270.elf pivot-pop-r8-trigger-1270.elf
+	rm -f pivot-store-rcx-rax-prepare-1270.elf pivot-store-rcx-rax-trigger-1270.elf
+	rm -f pivot-set-dr7-prepare-1270.elf pivot-set-dr7-trigger-1270.elf
+	rm -f pivot-pop-pair-prepare-1270.elf pivot-pop-pair-trigger-1270.elf
+	rm -f pivot-pop-rsp-prepare-1270.elf pivot-pop-rsp-trigger-1270.elf
 	rm -f $(ELF)
 	rm -f preflight-1270.elf
 	rm -f facs-preflight-1270.elf

