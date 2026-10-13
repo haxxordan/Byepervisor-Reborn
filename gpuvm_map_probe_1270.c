@@ -184,7 +184,8 @@ int main(void)
 done:
   if (mapped) {
     int rc = munmap(buffer, BUFFER_SIZE);
-    klog_printf("GVMMAP1270,1,cleanup,munmap_result=%d,errno=%d\n", rc, errno);
+    klog_printf("GVMMAP1270,1,cleanup,munmap_result=%d,errno=%d\n",
+                rc, rc == 0 ? 0 : errno);
     if (rc != 0)
       result = 1;
   }
