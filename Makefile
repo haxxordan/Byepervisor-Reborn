@@ -48,6 +48,9 @@ kernel-text-copyout-probe-1270.elf: kernel_text_copyout_probe_1270.c
 kernel-text-qword-probe-1270.elf: kernel_text_qword_probe_1270.c
 	$(CC) $(CFLAGS) -o $@ kernel_text_qword_probe_1270.c
 
+kernel-text-record-probe-1270.elf: kernel_text_record_probe_1270.c
+	$(CC) $(CFLAGS) -o $@ kernel_text_record_probe_1270.c
+
 carrier-read-probe-1270.elf: carrier-read-probe-1270.c include/offsets/12_70_candidate.h
 	$(CC) $(CFLAGS) -o $@ carrier-read-probe-1270.c
 
