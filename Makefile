@@ -249,7 +249,7 @@ clean:
 	rm -f resume-stock-prepare-1270.elf
 	rm -f resume-stock-apcr3-1270.elf
 	rm -f ap-cr3-high-probe-1270.elf
-	rm -f ap-entry-prepare-1270.elf ap-entry-probe-1270.elf
+	rm -f ap-entry-prepare-1270.elf ap-entry-probe-1270.elf ap-entry-stack-probe-1270.elf
 	rm -f pivot-iret-prepare-1270.elf pivot-iret-trigger-1270.elf
 	rm -f pivot-pop-rax-prepare-1270.elf pivot-pop-rax-trigger-1270.elf
 	rm -f pivot-dbreg-prepare-1270.elf pivot-dbreg-trigger-1270.elf
