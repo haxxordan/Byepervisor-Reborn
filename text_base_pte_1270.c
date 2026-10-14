@@ -122,10 +122,18 @@ int main(void)
   }
   if (!(entries[0] & RW) || !(entries[1] & RW) || !(entries[2] & RW) ||
       (entries[0] & NX) || (entries[1] & NX) || (entries[2] & NX) ||
-      !(old & PRESENT) || !(old & XOTEXT) || (old & NX) ||
-      !(old & PAGE_ADDR) || (old & PAGE_ADDR) >= MAX_TABLE_PA ||
-      desired == old) {
+      !(old & PRESENT) || (old & NX) ||
+      !(old & PAGE_ADDR) || (old & PAGE_ADDR) >= MAX_TABLE_PA) {
     save_line(fd, "stop,stage=unexpected-leaf\n");
+    close(fd);
+    return 7;
+  }
+  if (desired == old) {
+    save_line(fd, "end,already-prepared=1\n");
+    return close(fd) == 0 ? 0 : 10;
+  }
+  if (!(old & XOTEXT)) {
+    save_line(fd, "stop,stage=unexpected-flags\n");
     close(fd);
     return 7;
   }

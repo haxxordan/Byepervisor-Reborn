@@ -7,7 +7,11 @@
 // our custom image on AP 1; only that AP uses the carrier-page stack.
 shellcode:
     lea     rsp, [rip + 0xef9]          // page + 0xf00: parameter block
+#ifdef STRIKE_COMPACT_ENTRY
+    cmp     edi, 1
+#else
     cmp     rdi, 1
+#endif
     jne     stock
     push    rbx
     push    rsi

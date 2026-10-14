@@ -85,8 +85,8 @@
 #define STUB_QWORDS         8U
 #define PROBE_STEM          "fixed-ap-arg"
 #elif defined(AP_VMCB_STRIKE_1270)
-#define STUB_BYTES          211U
-#define STUB_QWORDS         27U
+#define STUB_BYTES          223U
+#define STUB_QWORDS         28U
 #define PROBE_STEM          "fixed-ap-vmcb-strike"
 #elif defined(AP_VMCB_SURVEY_1270)
 #define STUB_BYTES          170U
@@ -545,6 +545,9 @@ int main(void)
 #if defined(AP_VMCB_SURVEY_1270) || defined(AP_VMCB_STRIKE_1270)
   uint64_t survey_before = 0;
 #endif
+#ifdef AP_VMCB_STRIKE_1270
+  uint64_t strike_ctrl_before = 0;
+#endif
 #ifdef AP_HV_READ_1270
   uint64_t hv_value_before = 0;
 #ifdef AP_HV_DUAL_READ_1270
@@ -565,6 +568,10 @@ int main(void)
 #if defined(AP_VMCB_SURVEY_1270) || defined(AP_VMCB_STRIKE_1270)
       || read_qword(cave + KH_OFF_USER + 16, &survey_before) != 0 ||
       survey_before != 0
+#endif
+#ifdef AP_VMCB_STRIKE_1270
+      || read_qword(cave + KH_OFF_USER + 24, &strike_ctrl_before) != 0 ||
+      strike_ctrl_before != 0
 #endif
 #ifdef AP_HV_READ_1270
       || read_qword(cave + KH_OFF_USER + 16, &hv_value_before) != 0 ||
@@ -962,6 +969,11 @@ int main(void)
   uint64_t survey_count = 0;
   int survey_read = read_qword(cave + KH_OFF_USER + 16, &survey_count);
 #endif
+#ifdef AP_VMCB_STRIKE_1270
+  uint64_t strike_ctrl = 0;
+  int strike_ctrl_read = read_qword(cave + KH_OFF_USER + 24,
+                                   &strike_ctrl);
+#endif
 #ifdef AP_HV_READ_1270
   int hv_read = read_qword(cave + KH_OFF_USER + 16, &hv_value);
 #ifdef AP_HV_DUAL_READ_1270
@@ -1020,6 +1032,9 @@ int main(void)
 #if defined(AP_VMCB_SURVEY_1270) || defined(AP_VMCB_STRIKE_1270)
            ",survey_count=%" PRIu64 ",survey_read=%d"
 #endif
+#ifdef AP_VMCB_STRIKE_1270
+           ",reject_ctrl=0x%016" PRIx64 ",reject_ctrl_read=%d"
+#endif
 #ifdef AP_CORE_ARG_1270
            ",arg_read=%d,arg_nonzero=%u"
 #endif
@@ -1040,6 +1055,9 @@ int main(void)
 #endif
 #if defined(AP_VMCB_SURVEY_1270) || defined(AP_VMCB_STRIKE_1270)
            survey_count, survey_read,
+#endif
+#ifdef AP_VMCB_STRIKE_1270
+           strike_ctrl, strike_ctrl_read,
 #endif
 #ifdef AP_CORE_ARG_1270
            arg_read, arg_nonzero,
@@ -1083,6 +1101,9 @@ int main(void)
 #if defined(AP_VMCB_SURVEY_1270) || defined(AP_VMCB_STRIKE_1270)
          && ap_marker == AP_MARKER && survey_read == 0 &&
          survey_count == 16
+#endif
+#ifdef AP_VMCB_STRIKE_1270
+         && strike_ctrl_read == 0 && strike_ctrl == 0
 #endif
 #ifdef AP_CORE_ARG_1270
          && arg_read == 0 && arg_nonzero != 0
