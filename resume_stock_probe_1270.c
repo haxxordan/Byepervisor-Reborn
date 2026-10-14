@@ -24,6 +24,12 @@
 #define BIG_SAVE_BYTES      0x600U
 #define MAX_AWAKE_POLLS     600U
 #define MAX_RESUME_POLLS    15U
+#ifdef RESUME_STOCK_AP_CR3_1270
+#define TEST_CR3_PA         0x68000ULL
+#define OUTPUT_STEM        "stock-apcr3"
+#else
+#define OUTPUT_STEM        "stock-resume"
+#endif
 
 static uint8_t saved_head[KH_SCRATCH_MIN];
 static uint8_t saved_big[BIG_SAVE_BYTES];
@@ -34,6 +40,27 @@ static int read_qword(uint64_t addr, uint64_t *value)
   *value = 0;
   return kread(addr, value, sizeof(*value));
 }
+
+#ifdef RESUME_STOCK_AP_CR3_1270
+static int firmware_cr3_maps(uint64_t va, int write)
+{
+  const uint64_t frame4k = 0x000ffffffffff000ULL;
+  const uint64_t frame2m = 0x000fffffffe00000ULL;
+  const uint64_t nx = 1ULL << 63;
+  uint64_t dmap = kdldmap(0), pml4e = 0, pdpte = 0, pde = 0;
+  if (read_qword(dmap + TEST_CR3_PA + (((va >> 39) & 0x1ff) * 8), &pml4e) != 0 ||
+      !(pml4e & 1) || (pml4e & 0x80) ||
+      (pml4e & frame4k) >= 0x400000000ULL ||
+      read_qword(dmap + (pml4e & frame4k) + (((va >> 30) & 0x1ff) * 8), &pdpte) != 0 ||
+      !(pdpte & 1) || (pdpte & 0x80) ||
+      (pdpte & frame4k) >= 0x400000000ULL ||
+      read_qword(dmap + (pdpte & frame4k) + (((va >> 21) & 0x1ff) * 8), &pde) != 0 ||
+      (pde & 0x81) != 0x81 || ((pml4e | pdpte | pde) & nx) ||
+      (write && ((pml4e & pdpte & pde & 2) != 2)))
+    return -1;
+  return ((pde & frame2m) | (va & 0x1fffff)) < 0x40000000ULL ? 0 : -1;
+}
+#endif
 
 static int save_line(const char *line, int create)
 {
@@ -113,6 +140,16 @@ int main(void)
     return 3;
   }
 
+#ifdef RESUME_STOCK_AP_CR3_1270
+  if (firmware_cr3_maps(stock_vector, 0) != 0 ||
+      firmware_cr3_maps(cave + KH_OFF_USER, 1) != 0) {
+    klog("RSH1270,1,stop,stage=firmware-cr3-map,cr3=0x%016llx\n",
+         (unsigned long long)TEST_CR3_PA);
+    return 3;
+  }
+  cr3 = TEST_CR3_PA;
+#endif
+
   uint64_t authid = kernel_get_ucred_authid(getpid());
   if (kernel_set_ucred_authid(getpid(), SYSTEM_AUTHID) != 0 ||
       pin_to_core(HOOK_CORE) != 0) {
@@ -142,7 +179,7 @@ int main(void)
     return 6;
   }
   snprintf(output_path, sizeof(output_path),
-           "/mnt/usb0/PS5-12.70-stock-resume-%d-%ld-%ld.txt",
+           "/mnt/usb0/PS5-12.70-" OUTPUT_STEM "-%d-%ld-%ld.txt",
            (int)getpid(), (long)stamp.tv_sec, (long)stamp.tv_nsec);
   char line[256];
   snprintf(line, sizeof(line),
