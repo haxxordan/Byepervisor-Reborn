@@ -1,0 +1,390 @@
+#include <fcntl.h>
+#include <inttypes.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+#include <time.h>
+#include <unistd.h>
+
+#include <ps5/kernel.h>
+#include <ps5/klog.h>
+
+#include "kdlsym.h"
+#include "khook.h"
+#include "carrier_1270.h"
+#include "util.h"
+
+#if !defined(RESUME_STORE_PREP_ONLY_1270) && !defined(RESUME_STORE_REENABLE_AFTER_CE_1270)
+#error "12.70 resume-store S3 run raised CE-108262-9; do not rebuild unchanged"
+#endif
+
+#define FW_1270             0x12700000U
+#define SYSTEM_AUTHID       0x4800000000000007ULL
+#define HOOK_CORE           0
+#define HOOK_IST            6
+#define CAVE_STATE_OFF      0x600ULL
+#define PCPU_ARRAY_OFFSET   0x2e9cf00ULL
+#define PCPU_STRIDE         0x980ULL
+#define SECOND_MARKER       0x1270DBDB5EEDBEEFULL
+#define BIG_SAVE_BYTES      0x600U
+#define MAX_AWAKE_POLLS     600U
+#define MAX_RESUME_POLLS    15U
+#define STORE_QWORDS        29U
+#define STORE_OFFSET        0x100U
+#define STORE_SEED          0x1270570E00000000ULL
+#ifdef RESUME_STOCK_AP_CR3_1270
+#define TEST_CR3_PA         0x68000ULL
+#define OUTPUT_STEM        "stock-apcr3"
+#else
+#define OUTPUT_STEM        "stock-resume"
+#endif
+
+static uint8_t saved_head[KH_SCRATCH_MIN];
+static uint8_t saved_big[BIG_SAVE_BYTES];
+static char output_path[128];
+static carrier1270_t owned;
+static uint64_t saved_page_qwords[STORE_QWORDS];
+static uint64_t expected_qwords[STORE_QWORDS];
+
+static int append_store(kh_chain_t *chain, uint64_t dst, uint64_t value)
+{
+  return kh_chain_g(chain, KERNEL_GADGET_POP_RCX) == 0 &&
+         kh_chain_q(chain, dst) == 0 &&
+         kh_chain_g(chain, KERNEL_GADGET_POP_RAX) == 0 &&
+         kh_chain_q(chain, value) == 0 &&
+         kh_chain_g(chain, KERNEL_GADGET_ST_RCX_RAX) == 0 ? 0 : -1;
+}
+
+static int read_qword(uint64_t addr, uint64_t *value)
+{
+  *value = 0;
+  return kread(addr, value, sizeof(*value));
+}
+
+#ifdef RESUME_STOCK_AP_CR3_1270
+static int firmware_cr3_maps(uint64_t va, int write)
+{
+  const uint64_t frame4k = 0x000ffffffffff000ULL;
+  const uint64_t frame2m = 0x000fffffffe00000ULL;
+  const uint64_t nx = 1ULL << 63;
+  uint64_t dmap = kdldmap(0), pml4e = 0, pdpte = 0, pde = 0;
+  if (read_qword(dmap + TEST_CR3_PA + (((va >> 39) & 0x1ff) * 8), &pml4e) != 0 ||
+      !(pml4e & 1) || (pml4e & 0x80) ||
+      (pml4e & frame4k) >= 0x400000000ULL ||
+      read_qword(dmap + (pml4e & frame4k) + (((va >> 30) & 0x1ff) * 8), &pdpte) != 0 ||
+      !(pdpte & 1) || (pdpte & 0x80) ||
+      (pdpte & frame4k) >= 0x400000000ULL ||
+      read_qword(dmap + (pdpte & frame4k) + (((va >> 21) & 0x1ff) * 8), &pde) != 0 ||
+      (pde & 0x81) != 0x81 || ((pml4e | pdpte | pde) & nx) ||
+      (write && ((pml4e & pdpte & pde & 2) != 2)))
+    return -1;
+  return ((pde & frame2m) | (va & 0x1fffff)) < 0x40000000ULL ? 0 : -1;
+}
+#endif
+
+static int save_line(const char *line, int create)
+{
+  int flags = O_WRONLY | (create ? O_CREAT | O_EXCL : O_APPEND);
+  int fd = open(output_path, flags, 0600);
+  if (fd < 0)
+    return -1;
+  size_t length = strlen(line);
+  ssize_t written = write(fd, line, length);
+  int synced = written == (ssize_t)length ? fsync(fd) : -1;
+  int closed = close(fd);
+  return written == (ssize_t)length && synced == 0 && closed == 0 ? 0 : -1;
+}
+
+static int save_line_retry(const char *line)
+{
+  for (unsigned attempt = 0; attempt < 60; ++attempt) {
+    if (save_line(line, 0) == 0)
+      return 0;
+    sleep(1);
+  }
+  return -1;
+}
+
+static int cleanup(khook_t *hook, int armed, uint64_t cave,
+                   uint64_t authid, int restore_cave)
+{
+  int disarm = 0, gate = 0, head = 0, big = 0, marker = 0;
+  if (armed) {
+    intptr_t thread = kernel_get_proc_thread(getpid(), -1);
+    uint64_t row_thread = 0;
+    uint64_t row = (uint64_t)KERNEL_ADDRESS_DATA_BASE +
+                   PCPU_ARRAY_OFFSET + HOOK_CORE * PCPU_STRIDE;
+    if (pin_to_core(HOOK_CORE) != 0 || !thread ||
+        read_qword(row, &row_thread) != 0 || row_thread != (uint64_t)thread)
+      disarm = -1;
+    else
+      disarm = kh_disarm(hook);
+  }
+  if (hook->installed && disarm == 0)
+    gate = kh_restore(hook);
+  if (restore_cave && disarm == 0 && gate == 0) {
+    head = kwrite(cave, saved_head, sizeof(saved_head));
+    big = kwrite(cave + KH_OFF_BIG_CHAIN, saved_big, sizeof(saved_big));
+    marker = kwrite(cave + KH_OFF_USER, saved_head + KH_OFF_USER, 8);
+  }
+  int auth = kernel_set_ucred_authid(getpid(), authid);
+  int release = carrier1270_release(&owned);
+  klog("RST1270,1,cleanup,disarm=%d,gate=%d,head=%d,big=%d,marker=%d,auth=%d,release=%d\n",
+       disarm, gate, head, big, marker, auth, release);
+  return disarm == 0 && gate == 0 && head == 0 && big == 0 &&
+         marker == 0 && auth == 0 && release == 0 ? 0 : -1;
+}
+
+int main(void)
+{
+  uint32_t fw = kernel_get_fw_version();
+  if ((fw & 0xffff0000U) != FW_1270) {
+    klog("RSH1270,1,stop,stage=firmware,fw=0x%08x\n", fw);
+    return 2;
+  }
+
+  uint64_t cave = kdlsym(KERNEL_SYM_DATA_CAVE);
+  uint64_t target = kdlsym(KERNEL_SYM_HV_MP_STARTUP_CALL);
+  uint64_t stock_vector = kdlsym(KERNEL_SYM_MP_STARTUP_INIT_VECTOR);
+  uint64_t pmap = kdlsym(KERNEL_SYM_PMAP_STORE);
+  uint64_t cr3 = 0, state = 0, marker_before = 0;
+  if (target < ktext(0) || target >= ktext(KH_KIMG_MAX) ||
+      stock_vector < ktext(0) || stock_vector >= ktext(KH_KIMG_MAX) ||
+      read_qword(pmap + 0x28, &cr3) != 0 || cr3 == 0 || (cr3 & 0xfff) ||
+      read_qword(cave + CAVE_STATE_OFF, &state) != 0 || state != 0 ||
+      read_qword(cave + KH_OFF_USER, &marker_before) != 0 ||
+      marker_before != 0) {
+    klog("RSH1270,1,stop,stage=preflight,target=0x%016" PRIx64
+         ",vector=0x%016" PRIx64 ",cr3=0x%016" PRIx64
+         ",state=0x%016" PRIx64 ",marker=0x%016" PRIx64 "\n",
+         target, stock_vector, cr3, state, marker_before);
+    return 3;
+  }
+
+#ifdef RESUME_STOCK_AP_CR3_1270
+  if (firmware_cr3_maps(stock_vector, 0) != 0 ||
+      firmware_cr3_maps(cave + KH_OFF_USER, 1) != 0) {
+    klog("RSH1270,1,stop,stage=firmware-cr3-map,cr3=0x%016llx\n",
+         (unsigned long long)TEST_CR3_PA);
+    return 3;
+  }
+  cr3 = TEST_CR3_PA;
+#endif
+
+  uint64_t authid = kernel_get_ucred_authid(getpid());
+  if (kernel_set_ucred_authid(getpid(), SYSTEM_AUTHID) != 0 ||
+      pin_to_core(HOOK_CORE) != 0) {
+    kernel_set_ucred_authid(getpid(), authid);
+    klog("RSH1270,1,stop,stage=authid-or-affinity\n");
+    return 4;
+  }
+
+  intptr_t thread = kernel_get_proc_thread(getpid(), -1);
+  uint64_t row_thread = 0;
+  uint64_t row = (uint64_t)KERNEL_ADDRESS_DATA_BASE +
+                 PCPU_ARRAY_OFFSET + HOOK_CORE * PCPU_STRIDE;
+  if (!thread || read_qword(row, &row_thread) != 0 ||
+      row_thread != (uint64_t)thread ||
+      kread(cave, saved_head, sizeof(saved_head)) != 0 ||
+      kread(cave + KH_OFF_BIG_CHAIN, saved_big, sizeof(saved_big)) != 0) {
+    kernel_set_ucred_authid(getpid(), authid);
+    klog("RSH1270,1,stop,stage=thread-or-backup,thread=0x%016" PRIx64
+         ",row_thread=0x%016" PRIx64 "\n",
+         (uint64_t)thread, row_thread);
+    return 5;
+  }
+
+  if (carrier1270_acquire(&owned, kdldmap(0)) != 0 ||
+      owned.pa >= 0x40000000ULL ||
+      kread(kdldmap(owned.pa + STORE_OFFSET), saved_page_qwords,
+            sizeof(saved_page_qwords)) != 0) {
+    carrier1270_release(&owned);
+    kernel_set_ucred_authid(getpid(), authid);
+    klog("RST1270,1,stop,stage=owned-page\n");
+    return 5;
+  }
+  uint8_t handler_buf[STORE_QWORDS * 5 * 8];
+  kh_chain_t chain;
+  kh_chain_init(&chain, handler_buf, sizeof(handler_buf));
+  for (unsigned i = 0; i < STORE_QWORDS; ++i) {
+    expected_qwords[i] = STORE_SEED ^ ((uint64_t)i * 0x0101010101010101ULL);
+    if (append_store(&chain, kdldmap(owned.pa + STORE_OFFSET + i * 8),
+                     expected_qwords[i]) != 0) {
+      carrier1270_release(&owned);
+      kernel_set_ucred_authid(getpid(), authid);
+      return 5;
+    }
+  }
+
+  struct timespec stamp = {0};
+  if (clock_gettime(CLOCK_REALTIME, &stamp) != 0) {
+    carrier1270_release(&owned);
+    kernel_set_ucred_authid(getpid(), authid);
+    return 6;
+  }
+  snprintf(output_path, sizeof(output_path),
+           "/mnt/usb0/PS5-12.70-resume-store-%d-%ld-%ld.txt",
+           (int)getpid(), (long)stamp.tv_sec, (long)stamp.tv_nsec);
+  char line[256];
+  snprintf(line, sizeof(line),
+           "prepared,pid=%d,target=0x%016" PRIx64
+           ",stock_vector=0x%016" PRIx64 ",cr3=0x%016" PRIx64
+           ",owned_pa=0x%016" PRIx64 ",stores=%u,chain_bytes=%zu\n",
+           (int)getpid(), target, stock_vector, cr3, owned.pa,
+           STORE_QWORDS, chain.len);
+  if (save_line(line, 1) != 0) {
+    carrier1270_release(&owned);
+    kernel_set_ucred_authid(getpid(), authid);
+    klog("RSH1270,1,stop,stage=usb-create,path=%s\n", output_path);
+    return 7;
+  }
+
+  khook_t hook;
+  int result = kh_init(&hook, kread, kwrite, ktext(0), cave, HOOK_IST);
+  if (result != 0) {
+    carrier1270_release(&owned);
+    kernel_set_ucred_authid(getpid(), authid);
+    return 8;
+  }
+  hook.tss_stride = KH_TSS_STRIDE;
+  kh_set_tables(&hook, kdlsym(KERNEL_SYM_IDT_ARRAY),
+                kdlsym(KERNEL_SYM_COMMON_TSS));
+  kh_set_core(&hook, HOOK_CORE);
+  kh_set_hook_target(&hook, target);
+  hook.oneshot = 1;
+  kh_set_resume_rsi(&hook, stock_vector);
+  kh_set_resume_rdx(&hook, cr3);
+
+  klog("RSH1270,1,start,target=0x%016" PRIx64
+       ",vector=0x%016" PRIx64 ",cr3=0x%016" PRIx64 "\n",
+       target, stock_vector, cr3);
+  if (save_line("hook,before-install\n", 0) != 0) {
+    cleanup(&hook, 0, cave, authid, 0);
+    return 9;
+  }
+  result = kh_install(&hook, &chain);
+  if (result != 0) {
+    klog("RSH1270,1,stop,stage=install,result=%d\n", result);
+    save_line("hook,install-failed\n", 0);
+    cleanup(&hook, 0, cave, authid, 1);
+    return 10;
+  }
+  if (save_line("hook,after-install\n", 0) != 0) {
+    cleanup(&hook, 0, cave, authid, 1);
+    return 11;
+  }
+
+  uint64_t chain_prefix[5] = {0};
+  int chain_ok = kread(cave + KH_OFF_BIG_CHAIN, chain_prefix,
+                       sizeof(chain_prefix)) == 0 &&
+                 chain_prefix[0] == kgadget(KERNEL_GADGET_POP_RCX) &&
+                 chain_prefix[1] == cave + KH_OFF_USER &&
+                 chain_prefix[2] == kgadget(KERNEL_GADGET_POP_RAX) &&
+                 chain_prefix[3] == SECOND_MARKER &&
+                 chain_prefix[4] == kgadget(KERNEL_GADGET_ST_RCX_RAX);
+  if (!chain_ok) {
+    save_line("hook,marker-chain-mismatch\n", 0);
+    cleanup(&hook, 0, cave, authid, 1);
+    return 12;
+  }
+  uint8_t installed_handler[sizeof(handler_buf)] = {0};
+  if (kread(cave + KH_OFF_BIG_CHAIN + sizeof(chain_prefix),
+            installed_handler, chain.len) != 0 ||
+      memcmp(installed_handler, handler_buf, chain.len) != 0) {
+    save_line("hook,store-chain-mismatch\n", 0);
+    cleanup(&hook, 0, cave, authid, 1);
+    return 12;
+  }
+
+#ifdef RESUME_STORE_PREP_ONLY_1270
+  int prep_cleanup = cleanup(&hook, 0, cave, authid, 1);
+  save_line(prep_cleanup == 0 ? "end,prepare-only=ok\n" :
+            "end,prepare-only=cleanup-failed\n", 0);
+  klog("RSH1270,1,end,prepare-only,cleanup=%d\n", prep_cleanup);
+  return prep_cleanup == 0 ? 0 : 21;
+#endif
+
+  if (save_line("hook,before-trigger\n", 0) != 0) {
+    cleanup(&hook, 0, cave, authid, 1);
+    return 13;
+  }
+  result = kh_trigger(&hook);
+  if (result != 0) {
+    save_line("hook,trigger-failed\n", 0);
+    cleanup(&hook, 1, cave, authid, 1);
+    return 14;
+  }
+  if (save_line("hook,after-trigger\n", 0) != 0) {
+    cleanup(&hook, 1, cave, authid, 1);
+    return 15;
+  }
+
+  uint64_t marker = 0;
+  if (read_qword(cave + KH_OFF_USER, &marker) != 0 || marker != 0) {
+    save_line("hook,unexpected-early-marker\n", 0);
+    cleanup(&hook, 1, cave, authid, 1);
+    return 16;
+  }
+
+  if (save_line("ready,enter-rest-mode\n", 0) != 0) {
+    cleanup(&hook, 1, cave, authid, 1);
+    return 17;
+  }
+  klog("RSH1270,1,ready,path=%s\n", output_path);
+  notifyf("12.70 resume-store probe ready\nEnter rest mode, then resume");
+
+  struct timespec previous = {0};
+  clock_gettime(CLOCK_REALTIME, &previous);
+  unsigned resumed_polls = 0;
+  int saw_resume_gap = 0;
+  for (unsigned awake = 0; awake < MAX_AWAKE_POLLS; ++awake) {
+    sleep(1);
+    struct timespec now = {0};
+    if (clock_gettime(CLOCK_REALTIME, &now) == 0) {
+      int64_t gap = (int64_t)now.tv_sec - (int64_t)previous.tv_sec;
+      if (gap >= 10 && !saw_resume_gap) {
+        saw_resume_gap = 1;
+        klog("RSH1270,1,resume-gap,seconds=%ld\n", (long)gap);
+      }
+      previous = now;
+    }
+    if (read_qword(cave + KH_OFF_USER, &marker) != 0) {
+      save_line_retry("stop,marker-read-failed\n");
+      cleanup(&hook, 1, cave, authid, 1);
+      return 18;
+    }
+    if (marker == SECOND_MARKER || (saw_resume_gap && ++resumed_polls >= MAX_RESUME_POLLS))
+      break;
+    if (marker != 0) {
+      save_line_retry("stop,unexpected-marker\n");
+      cleanup(&hook, 1, cave, authid, 1);
+      return 19;
+    }
+  }
+
+  int fired = marker == SECOND_MARKER;
+  uint64_t observed[STORE_QWORDS] = {0};
+  int read_result = kread(kdldmap(owned.pa + STORE_OFFSET), observed,
+                          sizeof(observed));
+  int matched = read_result == 0 &&
+                memcmp(observed, expected_qwords, sizeof(observed)) == 0;
+  uint64_t pa_after = 0;
+  int pa_stable = carrier1270_translate(&owned, &pa_after) == 0 &&
+                  pa_after == owned.pa;
+  // Restore the owned allocation before returning it to the VM allocator.
+  if (pa_stable)
+    memcpy(owned.page + STORE_OFFSET, saved_page_qwords,
+           sizeof(saved_page_qwords));
+  int cleanup_result = cleanup(&hook, !fired, cave, authid, 1);
+  snprintf(line, sizeof(line),
+           "result,marker=0x%016" PRIx64 ",fired=%d,stores_match=%d,pa_stable=%d,read=%d,resume_gap=%d,cleanup=%d\n",
+           marker, fired, matched, pa_stable, read_result,
+           saw_resume_gap, cleanup_result);
+  int saved = save_line_retry(line);
+  klog("RSH1270,1,%s", line);
+  notifyf("12.70 resume-store probe\n%s", fired && matched && pa_stable ?
+          "29 stores verified" : "store test incomplete");
+  // CLOCK_REALTIME may not expose the S3 pause to this polling thread.
+  // The marker, cleanup, and durable result are the probe's success criteria.
+  return fired && matched && pa_stable && cleanup_result == 0 && saved == 0 ? 0 : 20;
+}

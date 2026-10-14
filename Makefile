@@ -60,6 +60,12 @@ resume-stock-prepare-1270.elf: resume_stock_probe_1270.c khook.c kdlsym.c util.c
 resume-stock-apcr3-1270.elf: resume_stock_probe_1270.c khook.c kdlsym.c util.c include/offsets/12_70_candidate.h
 	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -DRESUME_STOCK_AP_CR3_1270 -o $@ $(filter %.c,$^)
 
+resume-store-prepare-1270.elf: resume_store_probe_1270.c carrier_1270.c khook.c kdlsym.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -DAP_DIAG_STORE_HANDLER_1270 -DRESUME_STORE_PREP_ONLY_1270 -o $@ $(filter %.c,$^)
+
+resume-store-probe-1270.elf: resume_store_probe_1270.c carrier_1270.c khook.c kdlsym.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -DAP_DIAG_STORE_HANDLER_1270 -o $@ $(filter %.c,$^)
+
 ap-cr3-high-probe-1270.elf: ap-cr3-probe-1270.c include/offsets/12_70_candidate.h
 	$(CC) $(CFLAGS) -DAP_CR3_HIGH_1270 -o $@ $(filter %.c,$^)
 
