@@ -32,6 +32,24 @@ CFLAGS := -Wall -Werror -Wno-unused-function -g -I./include
 
 all: $(ELF)
 
+# The 12.70 launch-model path is a separate payload until it can be folded
+# into the existing multi-firmware entry point.
+ELF_1270 := byepervisor-1270.elf
+STRIKE_HDR_1270 := $(PAYLOAD_DIR)/vmcb_strike_1270.h
+
+$(STRIKE_HDR_1270): $(PAYLOAD_DIR)/vmcb_strike_1270.c \
+                     $(PAYLOAD_DIR)/entry_1270.S \
+                     $(PAYLOAD_DIR)/link_strike_1270.ld \
+                     $(PAYLOAD_DIR)/build_vmcb_strike_1270.sh
+	sh $(PAYLOAD_DIR)/build_vmcb_strike_1270.sh
+
+$(ELF_1270): byepervisor_1270.c textmap_1270.c khook.c kdlsym.c \
+             paging.c util.c include/textmap_1270.h \
+             include/offsets/12_70_candidate.h $(STRIKE_HDR_1270)
+	$(CC) $(CFLAGS) -DAP_1270_PRESTAGE -DAP_1270_SECOND_MARKER \
+	    -DAP_1270_STORE_HANDLER -DAP_VMCB_STRIKE_1270 \
+	    -DAP_UNIFIED_1270 -DENABLE_FW_1270 -o $@ $(filter %.c,$^)
+
 $(PAYLOAD_HDR): $(PAYLOAD_DIR)/break_hv.c $(PAYLOAD_DIR)/entry.S $(PAYLOAD_DIR)/link.ld
 	sh $(PAYLOAD_DIR)/build.sh
 
@@ -40,6 +58,10 @@ $(ELF): $(PAYLOAD_HDR) main.c kdlsym.c khook.c paging.c util.c
 
 clean:
 	rm -f $(ELF)
+	rm -f $(ELF_1270) $(STRIKE_HDR_1270) \
+	    $(PAYLOAD_DIR)/vmcb_strike_1270.bin \
+	    $(PAYLOAD_DIR)/vmcb_strike_1270.elf \
+	    $(PAYLOAD_DIR)/vmcb_strike_1270.o $(PAYLOAD_DIR)/entry_1270.o
 	rm -f $(PAYLOAD_DIR)/break_hv.h $(PAYLOAD_DIR)/break_hv.bin $(PAYLOAD_DIR)/break_hv.elf $(PAYLOAD_DIR)/*.o
 
 test: $(ELF)
