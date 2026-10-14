@@ -114,6 +114,33 @@ fixed-ap-vmcb15fields-prepare-1270.elf: ap_fixed_probe_1270.c khook.c kdlsym.c p
 fixed-ap-vmcb15fields-probe-1270.elf: ap_fixed_probe_1270.c khook.c kdlsym.c paging.c util.c include/offsets/12_70_candidate.h
 	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -DAP_DIAG_STORE_HANDLER_1270 -DAP_HV_READ_1270 -DAP_HV_DUAL_READ_1270 -DAP_HV_VMCB15_FIELDS_1270 -o $@ $(filter %.c,$^)
 
+break_hv_payload/vmcb_survey_1270.h: break_hv_payload/vmcb_survey_1270.c break_hv_payload/entry_1270.S break_hv_payload/link_1270.ld break_hv_payload/build_vmcb_survey_1270.sh
+	sh break_hv_payload/build_vmcb_survey_1270.sh
+
+fixed-ap-vmcb-survey-prepare-1270.elf: ap_fixed_probe_1270.c khook.c kdlsym.c paging.c util.c include/offsets/12_70_candidate.h break_hv_payload/vmcb_survey_1270.h
+	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -DAP_DIAG_STORE_HANDLER_1270 -DAP_VMCB_SURVEY_1270 -DFIXED_AP_PREP_ONLY_1270 -o $@ $(filter %.c,$^)
+
+fixed-ap-vmcb-survey-probe-1270.elf: ap_fixed_probe_1270.c khook.c kdlsym.c paging.c util.c include/offsets/12_70_candidate.h break_hv_payload/vmcb_survey_1270.h
+	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -DAP_DIAG_STORE_HANDLER_1270 -DAP_VMCB_SURVEY_1270 -o $@ $(filter %.c,$^)
+
+break_hv_payload/vmcb_strike_1270.h: break_hv_payload/vmcb_strike_1270.c break_hv_payload/entry_1270.S break_hv_payload/link_1270.ld break_hv_payload/build_vmcb_strike_1270.sh
+	sh break_hv_payload/build_vmcb_strike_1270.sh
+
+fixed-ap-vmcb-strike-prepare-1270.elf: ap_fixed_probe_1270.c khook.c kdlsym.c paging.c util.c include/offsets/12_70_candidate.h break_hv_payload/vmcb_strike_1270.h
+	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -DAP_DIAG_STORE_HANDLER_1270 -DAP_VMCB_STRIKE_1270 -DFIXED_AP_PREP_ONLY_1270 -o $@ $(filter %.c,$^)
+
+fixed-ap-vmcb-strike-probe-1270.elf: ap_fixed_probe_1270.c khook.c kdlsym.c paging.c util.c include/offsets/12_70_candidate.h break_hv_payload/vmcb_strike_1270.h
+	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -DAP_DIAG_STORE_HANDLER_1270 -DAP_VMCB_STRIKE_1270 -o $@ $(filter %.c,$^)
+
+break_hv_payload/ap_arg_probe_1270.h: break_hv_payload/ap_arg_probe_1270.S break_hv_payload/build_ap_arg_probe_1270.sh
+	sh break_hv_payload/build_ap_arg_probe_1270.sh
+
+fixed-ap-arg-prepare-1270.elf: ap_fixed_probe_1270.c khook.c kdlsym.c paging.c util.c include/offsets/12_70_candidate.h break_hv_payload/ap_arg_probe_1270.h
+	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -DAP_DIAG_STORE_HANDLER_1270 -DAP_CORE_ARG_1270 -DFIXED_AP_PREP_ONLY_1270 -o $@ $(filter %.c,$^)
+
+fixed-ap-arg-probe-1270.elf: ap_fixed_probe_1270.c khook.c kdlsym.c paging.c util.c include/offsets/12_70_candidate.h break_hv_payload/ap_arg_probe_1270.h
+	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -DAP_DIAG_STORE_HANDLER_1270 -DAP_CORE_ARG_1270 -o $@ $(filter %.c,$^)
+
 # Rebuild with -B whenever NPT_READ_PA changes; the output record logs the PA.
 NPT_READ_PA ?= 0x62a77000ULL
 fixed-ap-nptentry-probe-1270.elf: ap_fixed_probe_1270.c khook.c kdlsym.c paging.c util.c include/offsets/12_70_candidate.h
@@ -362,6 +389,9 @@ clean:
 	rm -f fixed-ap-vmcbptr-prepare-1270.elf fixed-ap-vmcbptr-probe-1270.elf
 	rm -f fixed-ap-vmcbfields-prepare-1270.elf fixed-ap-vmcbfields-probe-1270.elf
 	rm -f fixed-ap-vmcb15fields-prepare-1270.elf fixed-ap-vmcb15fields-probe-1270.elf
+	rm -f fixed-ap-vmcb-survey-prepare-1270.elf fixed-ap-vmcb-survey-probe-1270.elf
+	rm -f fixed-ap-vmcb-strike-prepare-1270.elf fixed-ap-vmcb-strike-probe-1270.elf
+	rm -f fixed-ap-arg-prepare-1270.elf fixed-ap-arg-probe-1270.elf
 	rm -f fixed-ap-nptentry-probe-1270.elf
 	rm -f fixed-ap-nptpair-prepare-1270.elf fixed-ap-nptpair-probe-1270.elf
 	rm -f fixed-ap-nptdump-prepare-1270.elf fixed-ap-nptdump-probe-1270.elf
