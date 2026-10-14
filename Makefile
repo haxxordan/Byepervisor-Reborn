@@ -66,6 +66,57 @@ resume-store-prepare-1270.elf: resume_store_probe_1270.c carrier_1270.c khook.c 
 resume-store-probe-1270.elf: resume_store_probe_1270.c carrier_1270.c khook.c kdlsym.c util.c include/offsets/12_70_candidate.h
 	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -DAP_DIAG_STORE_HANDLER_1270 -o $@ $(filter %.c,$^)
 
+fixed-ap-prepare-1270.elf: ap_fixed_probe_1270.c khook.c kdlsym.c paging.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -DAP_DIAG_STORE_HANDLER_1270 -DFIXED_AP_PREP_ONLY_1270 -o $@ $(filter %.c,$^)
+
+fixed-ap-probe-1270.elf: ap_fixed_probe_1270.c khook.c kdlsym.c paging.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -DAP_DIAG_STORE_HANDLER_1270 -o $@ $(filter %.c,$^)
+
+owned-resume-ap-prepare-1270.elf: ap_fixed_probe_1270.c carrier_1270.c khook.c kdlsym.c paging.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -DAP_DIAG_STORE_HANDLER_1270 -DAP_OWNED_RESUME_1270 -DFIXED_AP_PREP_ONLY_1270 -o $@ $(filter %.c,$^)
+
+owned-resume-ap-probe-1270.elf: ap_fixed_probe_1270.c carrier_1270.c khook.c kdlsym.c paging.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -DAP_DIAG_STORE_HANDLER_1270 -DAP_OWNED_RESUME_1270 -o $@ $(filter %.c,$^)
+
+fixed-ap-hvread-prepare-1270.elf: ap_fixed_probe_1270.c khook.c kdlsym.c paging.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -DAP_DIAG_STORE_HANDLER_1270 -DAP_HV_READ_1270 -DFIXED_AP_PREP_ONLY_1270 -o $@ $(filter %.c,$^)
+
+fixed-ap-hvread-probe-1270.elf: ap_fixed_probe_1270.c khook.c kdlsym.c paging.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -DAP_DIAG_STORE_HANDLER_1270 -DAP_HV_READ_1270 -o $@ $(filter %.c,$^)
+
+fixed-ap-pcpus-prepare-1270.elf: ap_fixed_probe_1270.c khook.c kdlsym.c paging.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -DAP_DIAG_STORE_HANDLER_1270 -DAP_HV_READ_1270 -DAP_HV_PCPUS_READ_1270 -DFIXED_AP_PREP_ONLY_1270 -o $@ $(filter %.c,$^)
+
+fixed-ap-pcpus-probe-1270.elf: ap_fixed_probe_1270.c khook.c kdlsym.c paging.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -DAP_DIAG_STORE_HANDLER_1270 -DAP_HV_READ_1270 -DAP_HV_PCPUS_READ_1270 -o $@ $(filter %.c,$^)
+
+fixed-ap-hvpair-prepare-1270.elf: ap_fixed_probe_1270.c khook.c kdlsym.c paging.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -DAP_DIAG_STORE_HANDLER_1270 -DAP_HV_READ_1270 -DAP_HV_DUAL_READ_1270 -DFIXED_AP_PREP_ONLY_1270 -o $@ $(filter %.c,$^)
+
+fixed-ap-hvpair-probe-1270.elf: ap_fixed_probe_1270.c khook.c kdlsym.c paging.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -DAP_DIAG_STORE_HANDLER_1270 -DAP_HV_READ_1270 -DAP_HV_DUAL_READ_1270 -o $@ $(filter %.c,$^)
+
+fixed-ap-vmcbptr-prepare-1270.elf: ap_fixed_probe_1270.c khook.c kdlsym.c paging.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -DAP_DIAG_STORE_HANDLER_1270 -DAP_HV_READ_1270 -DAP_HV_DUAL_READ_1270 -DAP_HV_VMCB_PTR_READ_1270 -DFIXED_AP_PREP_ONLY_1270 -o $@ $(filter %.c,$^)
+
+fixed-ap-vmcbptr-probe-1270.elf: ap_fixed_probe_1270.c khook.c kdlsym.c paging.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -DAP_DIAG_STORE_HANDLER_1270 -DAP_HV_READ_1270 -DAP_HV_DUAL_READ_1270 -DAP_HV_VMCB_PTR_READ_1270 -o $@ $(filter %.c,$^)
+
+fixed-ap-vmcbfields-prepare-1270.elf: ap_fixed_probe_1270.c khook.c kdlsym.c paging.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -DAP_DIAG_STORE_HANDLER_1270 -DAP_HV_READ_1270 -DAP_HV_DUAL_READ_1270 -DAP_HV_VMCB_FIELDS_1270 -DFIXED_AP_PREP_ONLY_1270 -o $@ $(filter %.c,$^)
+
+fixed-ap-vmcbfields-probe-1270.elf: ap_fixed_probe_1270.c khook.c kdlsym.c paging.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -DAP_DIAG_STORE_HANDLER_1270 -DAP_HV_READ_1270 -DAP_HV_DUAL_READ_1270 -DAP_HV_VMCB_FIELDS_1270 -o $@ $(filter %.c,$^)
+
+break_hv_payload/vmcb_rw_probe.h: break_hv_payload/vmcb_rw_probe.S break_hv_payload/build_vmcb_rw_probe.sh
+	sh break_hv_payload/build_vmcb_rw_probe.sh
+
+fixed-ap-vmcb-rw-prepare-1270.elf: ap_fixed_probe_1270.c khook.c kdlsym.c paging.c util.c include/offsets/12_70_candidate.h break_hv_payload/vmcb_rw_probe.h
+	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -DAP_DIAG_STORE_HANDLER_1270 -DAP_VMCB_RW_1270 -DFIXED_AP_PREP_ONLY_1270 -o $@ $(filter %.c,$^)
+
+fixed-ap-vmcb-rw-probe-1270.elf: ap_fixed_probe_1270.c khook.c kdlsym.c paging.c util.c include/offsets/12_70_candidate.h break_hv_payload/vmcb_rw_probe.h
+	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -DAP_DIAG_STORE_HANDLER_1270 -DAP_VMCB_RW_1270 -o $@ $(filter %.c,$^)
+
 ap-cr3-high-probe-1270.elf: ap-cr3-probe-1270.c include/offsets/12_70_candidate.h
 	$(CC) $(CFLAGS) -DAP_CR3_HIGH_1270 -o $@ $(filter %.c,$^)
 
@@ -277,6 +328,14 @@ clean:
 	rm -f carrier-save-probe-1270.elf
 	rm -f carrier-save-current-probe-1270.elf
 	rm -f carrier-neighborhood-probe-1270.elf
+	rm -f fixed-ap-prepare-1270.elf fixed-ap-probe-1270.elf
+	rm -f fixed-ap-hvread-prepare-1270.elf fixed-ap-hvread-probe-1270.elf
+	rm -f fixed-ap-pcpus-prepare-1270.elf fixed-ap-pcpus-probe-1270.elf
+	rm -f fixed-ap-hvpair-prepare-1270.elf fixed-ap-hvpair-probe-1270.elf
+	rm -f fixed-ap-vmcbptr-prepare-1270.elf fixed-ap-vmcbptr-probe-1270.elf
+	rm -f fixed-ap-vmcbfields-prepare-1270.elf fixed-ap-vmcbfields-probe-1270.elf
+	rm -f fixed-ap-vmcb-rw-prepare-1270.elf fixed-ap-vmcb-rw-probe-1270.elf
+	rm -f owned-resume-ap-prepare-1270.elf owned-resume-ap-probe-1270.elf
 	rm -f owned-carrier-probe-1270.elf
 	rm -f owned-carrier-map-probe-1270.elf
 	rm -f anon-carrier-probe-1270.elf
