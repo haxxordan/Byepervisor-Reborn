@@ -108,6 +108,33 @@ fixed-ap-vmcbfields-prepare-1270.elf: ap_fixed_probe_1270.c khook.c kdlsym.c pag
 fixed-ap-vmcbfields-probe-1270.elf: ap_fixed_probe_1270.c khook.c kdlsym.c paging.c util.c include/offsets/12_70_candidate.h
 	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -DAP_DIAG_STORE_HANDLER_1270 -DAP_HV_READ_1270 -DAP_HV_DUAL_READ_1270 -DAP_HV_VMCB_FIELDS_1270 -o $@ $(filter %.c,$^)
 
+fixed-ap-vmcb15fields-prepare-1270.elf: ap_fixed_probe_1270.c khook.c kdlsym.c paging.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -DAP_DIAG_STORE_HANDLER_1270 -DAP_HV_READ_1270 -DAP_HV_DUAL_READ_1270 -DAP_HV_VMCB15_FIELDS_1270 -DFIXED_AP_PREP_ONLY_1270 -o $@ $(filter %.c,$^)
+
+fixed-ap-vmcb15fields-probe-1270.elf: ap_fixed_probe_1270.c khook.c kdlsym.c paging.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -DAP_DIAG_STORE_HANDLER_1270 -DAP_HV_READ_1270 -DAP_HV_DUAL_READ_1270 -DAP_HV_VMCB15_FIELDS_1270 -o $@ $(filter %.c,$^)
+
+# Rebuild with -B whenever NPT_READ_PA changes; the output record logs the PA.
+NPT_READ_PA ?= 0x62a77000ULL
+fixed-ap-nptentry-probe-1270.elf: ap_fixed_probe_1270.c khook.c kdlsym.c paging.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -DAP_DIAG_STORE_HANDLER_1270 -DAP_HV_READ_1270 -DAP_HV_NPT_ENTRY_1270 -DNPT_READ_PA_1270=$(NPT_READ_PA) -o $@ $(filter %.c,$^)
+
+NPT_READ_PA2 ?= 0x62a78008ULL
+fixed-ap-nptpair-prepare-1270.elf: ap_fixed_probe_1270.c khook.c kdlsym.c paging.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -DAP_DIAG_STORE_HANDLER_1270 -DAP_HV_READ_1270 -DAP_HV_DUAL_READ_1270 -DAP_HV_NPT_ENTRY_1270 -DNPT_READ_PA_1270=$(NPT_READ_PA) -DNPT_READ_PA2_1270=$(NPT_READ_PA2) -DFIXED_AP_PREP_ONLY_1270 -o $@ $(filter %.c,$^)
+
+fixed-ap-nptpair-probe-1270.elf: ap_fixed_probe_1270.c khook.c kdlsym.c paging.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -DAP_DIAG_STORE_HANDLER_1270 -DAP_HV_READ_1270 -DAP_HV_DUAL_READ_1270 -DAP_HV_NPT_ENTRY_1270 -DNPT_READ_PA_1270=$(NPT_READ_PA) -DNPT_READ_PA2_1270=$(NPT_READ_PA2) -o $@ $(filter %.c,$^)
+
+break_hv_payload/npt_table_dump.h: break_hv_payload/npt_table_dump.S break_hv_payload/build_npt_table_dump.sh
+	sh break_hv_payload/build_npt_table_dump.sh
+
+fixed-ap-nptdump-prepare-1270.elf: ap_fixed_probe_1270.c khook.c kdlsym.c paging.c util.c include/offsets/12_70_candidate.h break_hv_payload/npt_table_dump.h
+	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -DAP_DIAG_STORE_HANDLER_1270 -DAP_NPT_TABLE_DUMP_1270 -DFIXED_AP_PREP_ONLY_1270 -o $@ $(filter %.c,$^)
+
+fixed-ap-nptdump-probe-1270.elf: ap_fixed_probe_1270.c khook.c kdlsym.c paging.c util.c include/offsets/12_70_candidate.h break_hv_payload/npt_table_dump.h
+	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -DAP_DIAG_STORE_HANDLER_1270 -DAP_NPT_TABLE_DUMP_1270 -o $@ $(filter %.c,$^)
+
 break_hv_payload/vmcb_rw_probe.h: break_hv_payload/vmcb_rw_probe.S break_hv_payload/build_vmcb_rw_probe.sh
 	sh break_hv_payload/build_vmcb_rw_probe.sh
 
@@ -334,6 +361,10 @@ clean:
 	rm -f fixed-ap-hvpair-prepare-1270.elf fixed-ap-hvpair-probe-1270.elf
 	rm -f fixed-ap-vmcbptr-prepare-1270.elf fixed-ap-vmcbptr-probe-1270.elf
 	rm -f fixed-ap-vmcbfields-prepare-1270.elf fixed-ap-vmcbfields-probe-1270.elf
+	rm -f fixed-ap-vmcb15fields-prepare-1270.elf fixed-ap-vmcb15fields-probe-1270.elf
+	rm -f fixed-ap-nptentry-probe-1270.elf
+	rm -f fixed-ap-nptpair-prepare-1270.elf fixed-ap-nptpair-probe-1270.elf
+	rm -f fixed-ap-nptdump-prepare-1270.elf fixed-ap-nptdump-probe-1270.elf
 	rm -f fixed-ap-vmcb-rw-prepare-1270.elf fixed-ap-vmcb-rw-probe-1270.elf
 	rm -f owned-resume-ap-prepare-1270.elf owned-resume-ap-probe-1270.elf
 	rm -f owned-carrier-probe-1270.elf

