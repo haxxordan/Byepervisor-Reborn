@@ -381,14 +381,11 @@ int main(void)
   return 2;
 #endif
 #ifndef AP_DIAG_PRESTAGE_1270
-  // Confirmed on 12.70 hardware: both candidate pages are NX. The old
-  // diagnostic panicked in the hook path, which uses POP_RDI to arm #DB.
-  if (kgadget(KERNEL_GADGET_POP_RDI) == ktext(0xD65548ULL) ||
-      kgadget(KERNEL_GADGET_CLD) == ktext(0x1226933ULL)) {
-    printf("[!] 12.70 AP diagnostic disabled: candidate ROP gadget is NX\n");
-    notifyf("12.70 AP diagnostic disabled: invalid gadget offsets");
-    return 2;
-  }
+  // The old hook/copy path is not qualified on 12.70. Keep this gate even
+  // when individual gadget offsets are corrected from the live text dump.
+  printf("[!] 12.70 legacy AP diagnostic is disabled\n");
+  notifyf("12.70 legacy AP diagnostic disabled");
+  return 2;
 #endif
 #else
   if ((fw & 0xffff0000U) == 0x12700000U) {

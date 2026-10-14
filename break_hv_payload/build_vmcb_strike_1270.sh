@@ -3,7 +3,7 @@ set -eu
 cd "$(dirname "$0")"
 
 cc="${HV_CC:-clang}"
-"$cc" -Oz -ffreestanding -nostdlib -fno-pic -fno-plt \
+"$cc" -Os -ffreestanding -nostdlib -fno-pic -fno-plt \
   -fno-stack-protector -fno-stack-clash-protection \
   -fomit-frame-pointer -fno-asynchronous-unwind-tables -falign-functions=1 \
   -fcf-protection=none -fno-jump-tables -mgeneral-regs-only \

