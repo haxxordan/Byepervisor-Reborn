@@ -117,6 +117,15 @@ fixed-ap-vmcb15fields-probe-1270.elf: ap_fixed_probe_1270.c khook.c kdlsym.c pag
 break_hv_payload/vmcb_survey_1270.h: break_hv_payload/vmcb_survey_1270.c break_hv_payload/entry_1270.S break_hv_payload/link_1270.ld break_hv_payload/build_vmcb_survey_1270.sh
 	sh break_hv_payload/build_vmcb_survey_1270.sh
 
+break_hv_payload/vmcb_poll_1270.h: break_hv_payload/vmcb_poll_1270.c break_hv_payload/entry_1270.S break_hv_payload/link_1270.ld break_hv_payload/build_vmcb_poll_1270.sh
+	sh break_hv_payload/build_vmcb_poll_1270.sh
+
+fixed-ap-vmcb-poll-prepare-1270.elf: ap_fixed_probe_1270.c khook.c kdlsym.c paging.c util.c include/offsets/12_70_candidate.h break_hv_payload/vmcb_poll_1270.h
+	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -DAP_DIAG_STORE_HANDLER_1270 -DAP_VMCB_POLL_1270 -DFIXED_AP_PREP_ONLY_1270 -o $@ $(filter %.c,$^)
+
+fixed-ap-vmcb-poll-probe-1270.elf: ap_fixed_probe_1270.c khook.c kdlsym.c paging.c util.c include/offsets/12_70_candidate.h break_hv_payload/vmcb_poll_1270.h
+	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -DAP_DIAG_STORE_HANDLER_1270 -DAP_VMCB_POLL_1270 -o $@ $(filter %.c,$^)
+
 fixed-ap-vmcb-survey-prepare-1270.elf: ap_fixed_probe_1270.c khook.c kdlsym.c paging.c util.c include/offsets/12_70_candidate.h break_hv_payload/vmcb_survey_1270.h
 	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -DAP_DIAG_STORE_HANDLER_1270 -DAP_VMCB_SURVEY_1270 -DFIXED_AP_PREP_ONLY_1270 -o $@ $(filter %.c,$^)
 
@@ -401,6 +410,7 @@ clean:
 	rm -f fixed-ap-vmcbfields-prepare-1270.elf fixed-ap-vmcbfields-probe-1270.elf
 	rm -f fixed-ap-vmcb15fields-prepare-1270.elf fixed-ap-vmcb15fields-probe-1270.elf
 	rm -f fixed-ap-vmcb-survey-prepare-1270.elf fixed-ap-vmcb-survey-probe-1270.elf
+	rm -f fixed-ap-vmcb-poll-prepare-1270.elf fixed-ap-vmcb-poll-probe-1270.elf
 	rm -f fixed-ap-vmcb-strike-prepare-1270.elf fixed-ap-vmcb-strike-probe-1270.elf
 	rm -f fixed-ap-arg-prepare-1270.elf fixed-ap-arg-probe-1270.elf
 	rm -f fixed-ap-nptentry-probe-1270.elf
