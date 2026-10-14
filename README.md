@@ -1,7 +1,7 @@
 # Byepervisor Reborn
 **Note: This repo should be considered a base exploit for work to be built on top of. It is not useful to regular users in its current release state, this is intended for developers.**
 
-**Local 12.70 port status:** See [PORT_12_70.md](PORT_12_70.md). The 12.70 table is incomplete and is not enabled. This checkout exits on 12.70 before kernel writes or hook setup; do not treat the built ELF as a 12.70 exploit.
+**Local 12.70 port status:** The separate `byepervisor-1270.elf` target completed a clean S3 strike and read kernel text on one launch-model PS5 (`soc=0x840f60`) running 12.70. It checks the exact text span and the two page-map layouts observed on that console. The default `byepervisor_reborn.elf` still exits on 12.70. See [PORT_12_70.md](PORT_12_70.md) for evidence and limits.
 
 ## Summary
 PS5 hypervisor exploit for 6.xx - 13.60 firmware. Bug details can be found [here](https://github.com/soniciso1/ps5-hv-writeups/blob/main/s3-resume-startup_mp-ap-launch.md). This bug was initially found by [theflow0](https://x.com/theflow0) and subsequently more people recently w/ assistance of LLMs. The TLDR is that on S3 resume, the `startup_mp` hypercall is invoked on core 0 to initialize the other AP cores (1-15), and takes a reset vector (`rip`) as one of the arguments for where the core will execute from. During this time on cores 1-15, an insecure Nested Page Table (NPT) config is applied. We can abuse this to run some shellcode that has R/W into the hypervisor's address space including the VM Control Blocks (VMCBs).
@@ -36,6 +36,8 @@ However this bug should technically be exploitable as low as 6.xx. With modifica
 
 ## Build notes
 This exploit payload is built using the [PS5-Payload-Dev SDK](https://github.com/ps5-payload-dev/sdk). Note also that the build for `break_hv_payload/` is slightly special, as it gets compiled to a flat binary of minimal size. The entirety of code in `break_hv_payload/` runs in supervisor/kernel mode.
+
+For the guarded launch-model 12.70 port, build `byepervisor-1270.elf`. It prepares and verifies the live text leaves, installs the proven compact AP strike on the checked `0x3ffff000` carrier, waits for one rest/resume cycle, verifies all sixteen VMCB writes, restores the hook, and reads the first eight kernel-text bytes. `byepervisor-1270-prepare.elf` checks the text-map and hook setup without entering rest mode, then restores its changes. Both write durable `PS5-12.70-byepervisor-1270-*.txt` checkpoints to `/mnt/usb0`.
 
 ## Adding firmware support
 To add support for a different firmware, the main thing that needs to be added is the header file in `include/offsets/`. This includes all the kernel offsets that are needed.

