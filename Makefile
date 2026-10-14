@@ -261,6 +261,15 @@ gadget-page-probe-1270.elf: gadget_page_probe_1270.c include/offsets/12_70_candi
 kernel-text-copyout-probe-1270.elf: kernel_text_copyout_probe_1270.c
 	$(CC) $(CFLAGS) -o $@ kernel_text_copyout_probe_1270.c
 
+text-base-pte-inspect-1270.elf: text_base_pte_1270.c kdlsym.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -o $@ $(filter %.c,$^)
+
+text-base-pte-prepare-1270.elf: text_base_pte_1270.c kdlsym.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DTEXT_PTE_APPLY_1270 -o $@ $(filter %.c,$^)
+
+text-base-status-1270.elf: text_base_status_1270.c kdlsym.c paging.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -o $@ $(filter %.c,$^)
+
 kernel-text-qword-probe-1270.elf: kernel_text_qword_probe_1270.c
 	$(CC) $(CFLAGS) -o $@ kernel_text_qword_probe_1270.c
 
@@ -375,6 +384,8 @@ clean:
 	rm -f pivot-pop-rsp-prepare-1270.elf pivot-pop-rsp-trigger-1270.elf
 	rm -f $(ELF)
 	rm -f preflight-1270.elf
+	rm -f text-base-pte-inspect-1270.elf text-base-pte-prepare-1270.elf
+	rm -f text-base-status-1270.elf
 	rm -f facs-preflight-1270.elf
 	rm -f gadget-page-probe-1270.elf
 	rm -f carrier-read-probe-1270.elf

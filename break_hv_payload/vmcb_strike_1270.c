@@ -23,14 +23,15 @@ void vmcb_probe_1270(uint64_t *param)
   uint64_t oracle = param[2];
   write64(oracle, ENTERED);
 
-  // Validate every target before changing any VMCB. Physical layout and
-  // field values were first observed in the read-only survey on this unit.
+  // Validate every target before changing any VMCB. A second S3 cycle may
+  // encounter either fresh controls (9) or controls already cleared (8).
+  // Physical layout was first observed in the read-only survey on this unit.
   for (uint64_t core = 0; core < 16; ++core) {
     uint64_t vpa = VMCB_BASE_PA + core * VMCB_STRIDE;
     uint64_t ctrl = read64(dmap + vpa + 0x90);
     uint64_t ncr3 = read64(dmap + vpa + 0xb0);
-    if (ctrl != 9 || ncr3 < 0x62000000ULL ||
-        ncr3 >= 0x63000000ULL || (ncr3 & 0xfff)) {
+    if ((ctrl & ~1ULL) != 8 || (ncr3 >> 24) != 0x62 ||
+        (ncr3 & 0xfff)) {
       write64(oracle + 8, core);
       write64(oracle, REJECTED);
       return;
