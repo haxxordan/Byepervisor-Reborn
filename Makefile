@@ -57,6 +57,9 @@ kernel-vmmcall-prepare-1270.elf: kernel_vmmcall_probe_1270.c khook.c kdlsym.c ut
 kernel-vmmcall-trigger-1270.elf: kernel_vmmcall_probe_1270.c khook.c kdlsym.c util.c include/offsets/12_70_candidate.h
 	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -DAP_DIAG_STORE_HANDLER_1270 -o $@ $(filter %.c,$^)
 
+kernel-vmmcall-skip-1270.elf: kernel_vmmcall_probe_1270.c khook.c kdlsym.c util.c include/offsets/12_70_candidate.h
+	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -DAP_DIAG_STORE_HANDLER_1270 -DKERNEL_VMMCALL_SKIP_1270 -o $@ $(filter %.c,$^)
+
 resume-stock-probe-1270.elf: resume_stock_probe_1270.c khook.c kdlsym.c util.c include/offsets/12_70_candidate.h
 	$(CC) $(CFLAGS) -DAP_DIAG_PRESTAGE_1270 -DAP_DIAG_SECOND_MARKER_1270 -o $@ $(filter %.c,$^)
 

