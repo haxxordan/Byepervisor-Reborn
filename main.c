@@ -11,7 +11,6 @@
 #include "khook.h"
 #include "util.h"
 #include "paging.h"
-#include "byepervisor_1270.h"
 
 #include "break_hv_payload/break_hv.h"
 
@@ -28,6 +27,7 @@
 #define HV_LOADER_PA_PRO          0x8e0800000
 
 uint64_t g_hv_base_pa;
+int sceSystemStateMgrEnterStandby(void);
 
 static int install_test_hook(int core_id, uint64_t cave)
 {
@@ -174,10 +174,7 @@ int main(void)
 
   // Do a quick firmware version detect, if we don't have offsets for it, goodbye!
   fw = kernel_get_fw_version();
-  printf("[+] Detected firmware: %x.%x\n", (fw & 0xFF000000) >> 0x18, (fw & 0x00FF0000) >> 0x10);
-
-  if ((fw & 0xffff0000U) == 0x12700000U)
-    return byepervisor_1270_run();
+  printf("[+] Detected firmware: %x.%02x\n", (fw & 0xFF000000) >> 0x18, (fw & 0x00FF0000) >> 0x10);
 
   if (kdlsym(KERNEL_SYM_HV_MP_STARTUP_CALL) == 0) {
     printf("[!] Undetected firmware, exiting!\n");
@@ -322,7 +319,9 @@ int main(void)
     }
 
     printf("[+] Hook installed, enter sleep and resume!\n");
-    notifyf("Byepervisor Reborn\nEnter sleep and resume!\n");
+    notifyf("Byepervisor Reborn\nEntering rest mode in 3 secs\n");
+    sleep(3);
+    sceSystemStateMgrEnterStandby();
   } else {
     printf("khook: hook already ARMED (state survived)\n");
   }
