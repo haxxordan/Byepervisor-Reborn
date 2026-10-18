@@ -8,9 +8,12 @@ Very similarly to (one version of) [byepervisor of old](https://github.com/PS5De
 
 Currently only the following firmwares are fully supported:
 
+- 12.70 (reported working on regular and Pro consoles)
 - 13.60
 - 13.20
 - 13.00 (untested)
+
+The 12.70 offset table is based on [EchoStretch's port](https://github.com/EchoStretch/Byepervisor-Reborn). It uses the same generic resume and hypervisor payload as the other supported firmwares.
 
 However this bug should technically be exploitable as low as 6.xx. With modifications, it could work on 14.00 as well, but this is not provided here, especially since there is no public 14.00 kernel exploit anyways.
 
@@ -35,18 +38,6 @@ However this bug should technically be exploitable as low as 6.xx. With modifica
 ## Build notes
 This exploit payload is built using the [PS5-Payload-Dev SDK](https://github.com/ps5-payload-dev/sdk). Note also that the build for `break_hv_payload/` is slightly special, as it gets compiled to a flat binary of minimal size. The entirety of code in `break_hv_payload/` runs in supervisor/kernel mode.
 
-### Firmware 12.70 (launch model)
-
-The 12.70 implementation is currently a separate target:
-
-```sh
-make PS5_PAYLOAD_SDK=/path/to/ps5-payload-sdk byepervisor-1270.elf
-```
-
-It has been exercised on one launch-model PS5 with firmware 12.70, Relapse, and elfldr. One complete rest/resume run returned to the home screen and displayed the first eight kernel text bytes (`e8 5b c5 58 00 00 00 00`). Its USB result recorded 16 AP VMCBs processed, all 342 planned text-map leaves verified, and a successful kernel text read. The number of leaves changes with KASLR; 853 was also observed on the same console in an earlier boot.
-
-This target rejects firmware or SoC mismatches, unexpected page-table layouts, and dirty data-cave state before arming the resume hook. It leaves kernel text readable and writable after resume. It has not been tested on Slim or Pro hardware, and does not boot Linux or include kernel patches. See [PORT_12_70.md](PORT_12_70.md) for the implementation and test boundary.
-
 ## Adding firmware support
 To add support for a different firmware, the main thing that needs to be added is the header file in `include/offsets/`. This includes all the kernel offsets that are needed.
 
@@ -60,4 +51,4 @@ Some firmwares might require more extensive modifications if gadgets don't exist
 ## How to use
 1. Run kernel exploit chain and get to elfldr
 2. Send `byepervisor.elf`
-3. Follow the directions of the notifications
+3. The payload enters rest mode after a three-second notification; resume the console normally.

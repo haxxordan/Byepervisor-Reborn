@@ -1,7 +1,5 @@
 *.elf
 *.o
 *.bin
-/break_hv_payload/break_hv_diag.h
-/break_hv_payload/vmcb_strike_1270.h
 *~
 
